@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# IntelliJ IDEA / JetBrains IDEs
+*.iml
+*.iws
+out/
+.idea/
+
+# Python virtual environments
+.venv/

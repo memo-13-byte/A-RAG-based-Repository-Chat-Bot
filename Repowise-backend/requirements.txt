@@ -1,0 +1,33 @@
+# FastAPI ve Server
+fastapi==0.121.0
+uvicorn[standard]==0.38.0
+python-multipart==0.0.20
+pydantic==2.12.4
+pydantic-settings>=2.8.0
+
+# Environment Variables
+python-dotenv==1.2.1
+
+# İleride eklenecekler (şimdilik yorum satırında):
+
+# LLM ve RAG
+# openai>=1.0.0
+# anthropic>=0.21.0
+# langchain>=0.1.0
+# langchain-community>=0.0.20
+
+# Embeddings
+# sentence-transformers>=2.2.2
+# chromadb>=0.4.0
+
+# Code Analysis
+# tree-sitter>=0.20.0
+# GitPython>=3.1.0
+
+# Neo4j
+# neo4j>=5.0.0
+# py2neo>=2021.2.3
+
+# Utilities
+# requests>=2.31.0
+# aiohttp>=3.9.0

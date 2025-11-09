@@ -11,9 +11,9 @@ const api = axios.create({
   },
 });
 
-// API fonksiyonları
+// API functions
 export const chatAPI = {
-  // Mesaj gönder
+  // Send message
   sendMessage: async (message, repositoryUrl = null, conversationId = null) => {
     const response = await api.post('/api/chat/send', {
       message,
@@ -23,13 +23,13 @@ export const chatAPI = {
     return response.data;
   },
 
-  // Sohbet geçmişini getir
+  // Get chat history
   getConversation: async (conversationId) => {
     const response = await api.get(`/api/chat/conversations/${conversationId}`);
     return response.data;
   },
 
-  // Sohbeti sil
+  // Delete chat
   deleteConversation: async (conversationId) => {
     const response = await api.delete(`/api/chat/conversations/${conversationId}`);
     return response.data;
@@ -37,13 +37,13 @@ export const chatAPI = {
 };
 
 export const repositoryAPI = {
-  // Repository listesi
+  // Repository list
   listRepositories: async () => {
     const response = await api.get('/api/repository/');
     return response.data;
   },
 
-  // Repository analiz et
+  // Analyze repository
   analyzeRepository: async (repositoryUrl) => {
     const response = await api.post('/api/repository/analyze', null, {
       params: { repository_url: repositoryUrl },
@@ -51,7 +51,7 @@ export const repositoryAPI = {
     return response.data;
   },
 
-  // Repository istatistikleri
+  // Repository statistics
   getRepositoryStats: async (repoName) => {
     const response = await api.get(`/api/repository/${repoName}/stats`);
     return response.data;
