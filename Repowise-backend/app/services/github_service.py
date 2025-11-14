@@ -2,10 +2,11 @@
 GitHub Service - GitHub API integration
 """
 
-from github import Github, GithubException
-from typing import Dict, List, Optional
-from app.core.config import settings
 import logging
+from typing import Dict, List, Optional
+
+from ..core.config import settings
+from github import Github, GithubException
 
 logger = logging.getLogger(__name__)
 

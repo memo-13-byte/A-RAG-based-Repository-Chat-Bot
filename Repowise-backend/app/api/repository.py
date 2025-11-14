@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import List
-from app.services.github_service import github_service
+from ..services.github_service import github_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -141,7 +141,11 @@ async def get_repository_readme(repo_name: str):
 
 @router.get("/{repo_name}/files")
 async def get_repository_files(repo_name: str, path: str = ""):
-    """Get the repository's file tree"""
+    """Get the repository's file tree
+    Args:
+        repo_name: Repository name or full name (e.g., langchain-ai/langchain)
+        path: Path within the repository to list files from
+    """
 
     repo = next(
         (r for r in analyzed_repositories if r["name"] == repo_name or r["full_name"] == repo_name),
@@ -153,7 +157,7 @@ async def get_repository_files(repo_name: str, path: str = ""):
 
     try:
         files = github_service.get_file_tree(repo["url"], path)
-
+        # Examp
         return {
             "repository": repo["full_name"],
             "path": path,

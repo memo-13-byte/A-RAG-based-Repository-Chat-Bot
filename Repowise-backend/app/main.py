@@ -31,7 +31,7 @@ async def health_check():
     return {"status": "ok"}
 
 # API routes
-from app.api import chat, repository
+from .api import chat, repository
 
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(repository.router, prefix="/api/repository", tags=["repository"])
