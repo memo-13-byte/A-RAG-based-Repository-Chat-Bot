@@ -241,31 +241,31 @@ RepoWise/
 
 ## 🗺️ Development Roadmap
 
-### ✅ Phase 1: Foundation (Weeks 1-10) - COMPLETE
+### ✅ Phase 1: Foundation (Weeks 1-8) - COMPLETE
 - FastAPI backend + React frontend
 - GitHub API integration
 - LLM service with fallback
 - Smart chat system
 - Full-stack integration
 
-### 🔄 Phase 2: RAG Pipeline (Weeks 11-14)
+### 🔄 Phase 2: RAG Pipeline (Weeks 8-11)
 - ChromaDB vector database
 - CodeBERT embeddings
 - Semantic code search
 - Context-aware responses
 
-### 📅 Phase 3: Knowledge Graph (Weeks 15-17)
+### 📅 Phase 3: Knowledge Graph (Weeks 11-13)
 - Neo4j graph database
 - Code structure mapping
 - Dependency analysis
 - Graph visualization
 
-### 📅 Phase 4: Multi-Agent (Weeks 18-20)
+### 📅 Phase 4: Multi-Agent (Weeks 11-13) (Parallely)
 - AutoCodeRover, CodexGraph
 - Agent orchestration
 - Performance comparison
 
-### 📅 Phase 5: Evaluation (Weeks 21-24)
+### 📅 Phase 5: Evaluation and Refactoring (Weeks 13-24)
 - Question dataset (80-100)
 - User study (10-15 developers)
 - Academic paper
