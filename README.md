@@ -88,8 +88,9 @@ cd RepoWise/Repowise-backend
 # Create virtual environment (Python 3.11/3.12!)
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-# If unauthorized access error occurs, paste this:
+# If unauthorized access error occurs, paste this and activate environment:
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+
 # Install dependencies
 pip install --upgrade pip
 pip install -r requirements.txt
