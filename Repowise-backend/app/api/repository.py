@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-from ..services.github_service import github_service
+# from ..services.github_service import github_service
+from ..services.git_factory import get_git_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -41,13 +42,15 @@ async def list_repositories():
 async def analyze_repository(repository_url: str, background_tasks: BackgroundTasks):
     """
     Analyze a new repository and add it to the system
-
-    - **repository_url**: GitHub repository URL (ex: https://github.com/langchain-ai/langchain)
     """
     try:
-        # Fetch repository information from GitHub
+        # --- DEĞİŞİKLİK: Doğru servisi seç ---
+        git_service = get_git_service(repository_url)
+        # -------------------------------------
+
+        # Fetch repository information using the factory service
         logger.info(f"Analyzing repository: {repository_url}")
-        repo_info = github_service.get_repository_info(repository_url)
+        repo_info = git_service.get_repository_info(repository_url)
 
         # Check if it has already been analyzed
         existing = next(
@@ -64,7 +67,7 @@ async def analyze_repository(repository_url: str, background_tasks: BackgroundTa
             }
 
         # Check README (optional)
-        readme_content = github_service.get_readme(repository_url)
+        readme_content = git_service.get_readme(repository_url)
         if readme_content:
             repo_info["has_readme"] = True
             repo_info["readme_length"] = len(readme_content)
@@ -80,9 +83,6 @@ async def analyze_repository(repository_url: str, background_tasks: BackgroundTa
 
         logger.info(f"Repository analyzed successfully: {repo_info['full_name']}")
 
-        # More detailed analysis can be done in the Background
-        # background_tasks.add_task(deep_analyze_repository, repo_info)
-
         return {
             "status": "success",
             "message": f"Repository '{repo_info['full_name']}' analyzed successfully",
@@ -95,7 +95,6 @@ async def analyze_repository(repository_url: str, background_tasks: BackgroundTa
     except Exception as e:
         logger.error(f"Error analyzing repository: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to analyze repository: {str(e)}")
-
 
 @router.get("/{repo_name}/stats")
 async def get_repository_stats(repo_name: str):
@@ -111,11 +110,16 @@ async def get_repository_stats(repo_name: str):
         raise HTTPException(status_code=404, detail=f"Repository '{repo_name}' not found")
 
     try:
-        # Fetch current statistics from GitHub
-        stats = github_service.get_repository_stats(repo["url"])
+        # --- DEĞİŞİKLİK: URL'den servisi bul ---
+        repo_url = repo["url"]
+        git_service = get_git_service(repo_url)
+        # ---------------------------------------
+
+        # Fetch current statistics
+        stats = git_service.get_repository_stats(repo_url)
 
         # Recent commits
-        recent_commits = github_service.get_recent_commits(repo["url"], limit=10)
+        recent_commits = git_service.get_recent_commits(repo_url, limit=10)
 
         return {
             "repository": repo,
@@ -141,7 +145,12 @@ async def get_repository_readme(repo_name: str):
         raise HTTPException(status_code=404, detail=f"Repository '{repo_name}' not found")
 
     try:
-        readme = github_service.get_readme(repo["url"])
+        # --- DEĞİŞİKLİK: URL'den servisi bul ---
+        repo_url = repo["url"]
+        git_service = get_git_service(repo_url)
+        # ---------------------------------------
+
+        readme = git_service.get_readme(repo_url)
 
         if not readme:
             raise HTTPException(status_code=404, detail="README not found")
@@ -165,19 +174,7 @@ async def get_repository_files(
         path: str = Query("", description="Path within the repository (e.g., 'src/components')")
 ):
     """
-    Get the repository's file tree (FIXED: uses query parameters)
-
-    Args:
-        repo_name: Repository full name (e.g., 'langchain-ai/langchain')
-        path: Optional path within the repository to list files from (default: root)
-
-    Returns:
-        List of files and directories with metadata
-
-    Examples:
-        GET /api/repository/files?repo_name=langchain-ai/langchain
-        GET /api/repository/files?repo_name=langchain-ai/langchain&path=libs
-        GET /api/repository/files?repo_name=langchain-ai/langchain&path=libs/langchain
+    Get the repository's file tree
     """
 
     logger.info(f"File tree request - repo_name: '{repo_name}', path: '{path}'")
@@ -188,16 +185,26 @@ async def get_repository_files(
         None
     )
 
-    # If not found in analyzed list, try to fetch directly from GitHub
+    # If not found in analyzed list, try to fetch directly
     if not repo:
-        logger.info(f"Repository '{repo_name}' not in analyzed list, fetching directly from GitHub")
+        logger.info(f"Repository '{repo_name}' not in analyzed list, fetching directly")
 
-        # Construct GitHub URL
-        repo_url = f"https://github.com/{repo_name}"
+        # --- DEĞİŞİKLİK: URL Belirleme Mantığı ---
+        if "http" in repo_name:
+            # Eğer repo_name zaten bir URL ise (örn: https://gitlab.com/user/project)
+            repo_url = repo_name
+        else:
+            # URL değilse varsayılan olarak GitHub kabul et
+            repo_url = f"https://github.com/{repo_name}"
+        # -----------------------------------------
 
         try:
+            # --- Servisi Seç ---
+            git_service = get_git_service(repo_url)
+            # -------------------
+
             # Verify repository exists by fetching basic info
-            repo_info = github_service.get_repository_info(repo_url)
+            repo_info = git_service.get_repository_info(repo_url)
 
             # Create minimal repo dict for file fetching
             repo = {
@@ -206,27 +213,31 @@ async def get_repository_files(
                 "name": repo_info["name"]
             }
 
-            logger.info(f"Repository found on GitHub: {repo['full_name']}")
+            logger.info(f"Repository found: {repo['full_name']}")
 
         except ValueError as e:
-            logger.error(f"Repository not found on GitHub: {repo_name} - {e}")
+            logger.error(f"Repository not found: {repo_name} - {e}")
             raise HTTPException(
                 status_code=404,
                 detail=f"Repository '{repo_name}' not found. Please check the repository name or analyze it first."
             )
         except Exception as e:
-            logger.error(f"Error accessing GitHub: {e}")
+            logger.error(f"Error accessing Git API: {e}")
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to access GitHub API: {str(e)}"
+                detail=f"Failed to access Git API: {str(e)}"
             )
 
     try:
         repo_full_name = repo.get('full_name', repo_name)
+        repo_url = repo["url"]  # URL kesin var
+
         logger.info(f"Fetching file tree for '{repo_full_name}' at path: '{path}'")
 
-        # Get file tree from GitHub service
-        files = github_service.get_file_tree(repo["url"], path)
+        # --- DEĞİŞİKLİK: Servisi Seç ve Kullan ---
+        git_service = get_git_service(repo_url)
+        files = git_service.get_file_tree(repo_url, path)
+        # -----------------------------------------
 
         if not files:
             logger.warning(f"No files found at path '{path}' in {repo_full_name}")
@@ -247,7 +258,6 @@ async def get_repository_files(
         }
 
     except ValueError as e:
-        # Invalid path or access denied
         logger.error(f"Invalid path '{path}' in {repo_name}: {e}")
         raise HTTPException(
             status_code=400,

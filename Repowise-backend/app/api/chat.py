@@ -7,7 +7,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
-from ..services.github_service import github_service
+# from ..services.github_service import github_service
+from ..services.git_factory import get_git_service
 from ..services.llm_service import llm_service
 from ..services.rag_service import rag_service
 import logging
@@ -92,16 +93,11 @@ def build_repository_context(
 ) -> tuple[str, List[str]]:
     """
     Build context string from repository information for LLM
-
-    Args:
-        repo_info: Repository metadata from GitHub
-        readme: README content
-        message_lower: Lowercase user message for keyword detection
-        repository_url: Repository URL
-
-    Returns:
-        (context_string, sources_list)
     """
+    # --- Choosing the correct service ---
+    git_service = get_git_service(repository_url)
+    # -------------------------------------
+
     sources = []
 
     # Basic repository information
@@ -135,12 +131,13 @@ Last Updated: {repo_info['updated_at'][:10]}
     if any(keyword in message_lower for keyword in
            ["language", "dil", "teknoloji", "technology", "written", "yazilmis"]):
         try:
-            stats = github_service.get_repository_stats(repository_url)
+            # git_service kullanıldı
+            stats = git_service.get_repository_stats(repository_url)
             if stats.get('languages'):
                 context += "\nLanguage Distribution:\n"
                 for lang, percentage in list(stats['languages'].items())[:5]:
                     context += f"- {lang}: {percentage}%\n"
-                sources.append("GitHub language statistics")
+                sources.append("Language statistics")
         except Exception as e:
             logger.warning(f"Could not fetch language stats: {e}")
 
@@ -148,14 +145,15 @@ Last Updated: {repo_info['updated_at'][:10]}
     if any(keyword in message_lower for keyword in
            ["who", "kim", "contributor", "develop", "gelistir", "author", "owner"]):
         try:
-            stats = github_service.get_repository_stats(repository_url)
+            # git_service kullanıldı
+            stats = git_service.get_repository_stats(repository_url)
             if stats.get('contributors_count'):
                 context += f"\nTotal Contributors: {stats['contributors_count']}\n"
             if stats.get('top_contributors'):
                 context += "Top Contributors:\n"
                 for contrib in stats['top_contributors'][:5]:
                     context += f"- @{contrib['login']}: {contrib['contributions']} contributions\n"
-                sources.append("GitHub contributors data")
+                sources.append("Contributors data")
         except Exception as e:
             logger.warning(f"Could not fetch contributors: {e}")
 
@@ -163,7 +161,8 @@ Last Updated: {repo_info['updated_at'][:10]}
     if any(keyword in message_lower for keyword in
            ["recent", "son", "last", "commit", "update", "guncel"]):
         try:
-            recent_commits = github_service.get_recent_commits(repository_url, limit=5)
+            # git_service kullanıldı
+            recent_commits = git_service.get_recent_commits(repository_url, limit=5)
             context += "\nRecent Commits:\n"
             for commit in recent_commits:
                 context += f"- {commit['sha'][:7]}: {commit['message']} (by {commit['author']} on {commit['date'][:10]})\n"
@@ -210,19 +209,14 @@ async def generate_rag_response(
 ) -> tuple[str, List[str], float, bool, int]:
     """
     Generate response using RAG (Retrieval-Augmented Generation)
-
-    Args:
-        message: User query
-        repository_url: GitHub repository URL
-        repo_info: Repository info from GitHub
-        auto_index: Auto-index if not indexed
-
-    Returns:
-        (response_text, sources, confidence, rag_used, indexed_chunks)
     """
     try:
-        # Parse repo name
-        owner, repo_name = github_service.parse_repo_url(repository_url)
+        # --- DEĞİŞİKLİK: Doğru servisi seç ---
+        git_service = get_git_service(repository_url)
+        # -------------------------------------
+
+        # Parse repo name using the correct service
+        owner, repo_name = git_service.parse_repo_url(repository_url)
         full_repo_name = f"{owner}/{repo_name}"
 
         logger.info(f"Attempting RAG query for: {full_repo_name}")
@@ -433,23 +427,7 @@ async def generate_smart_response(
         auto_index: bool = True
 ) -> tuple[str, List[str], float, bool, int]:
     """
-    Generate intelligent response using GitHub data, RAG, and LLM
-
-    Workflow:
-    1. Check if question is code-related
-    2. If code-related and use_rag=True -> Try RAG first
-    3. If RAG fails or not code-related -> Use GitHub data + LLM
-    4. Fallback to rule-based if LLM fails
-
-    Args:
-        message: User query
-        repository_url: GitHub repository URL
-        use_llm: Whether to use LLM for response generation
-        use_rag: Whether to use RAG for code questions
-        auto_index: Auto-index repository if needed
-
-    Returns:
-        (response_text, sources, confidence, rag_used, indexed_chunks)
+    Generate intelligent response using Git data, RAG, and LLM
     """
 
     # Return early if no repository selected
@@ -463,8 +441,12 @@ async def generate_smart_response(
         )
 
     try:
-        # Fetch repository information from GitHub
-        repo_info = github_service.get_repository_info(repository_url)
+        # --- DEĞİŞİKLİK: Doğru servisi seç ---
+        git_service = get_git_service(repository_url)
+        # -------------------------------------
+
+        # Fetch repository information from Git Service
+        repo_info = git_service.get_repository_info(repository_url)
         message_lower = message.lower()
 
         rag_used = False
@@ -485,12 +467,12 @@ async def generate_smart_response(
                 logger.info("Using RAG response")
                 return rag_response, rag_sources, rag_confidence, True, chunks
             else:
-                logger.info("RAG failed, falling back to GitHub data")
+                logger.info("RAG failed, falling back to standard data")
 
-        # Fallback: Use GitHub data + LLM
-        logger.info("Using GitHub data + LLM")
+        # Fallback: Use standard Git data + LLM
+        logger.info("Using Git data + LLM")
 
-        readme = github_service.get_readme(repository_url)
+        readme = git_service.get_readme(repository_url)
 
         # Build context and collect sources
         context, sources = build_repository_context(
@@ -706,15 +688,13 @@ async def index_repository(
 async def get_index_status(repository_url: str):
     """
     Get indexing status for a repository
-
-    Args:
-        repository_url: GitHub repository URL
-
-    Returns:
-        Index status
     """
     try:
-        owner, repo_name = github_service.parse_repo_url(repository_url)
+        # --- DEĞİŞİKLİK ---
+        git_service = get_git_service(repository_url)
+        owner, repo_name = git_service.parse_repo_url(repository_url)
+        # ------------------
+        
         full_repo_name = f"{owner}/{repo_name}"
 
         status = rag_service.get_index_status(full_repo_name)
@@ -728,20 +708,17 @@ async def get_index_status(repository_url: str):
             detail=f"Error getting index status: {str(e)}"
         )
 
-
 @router.delete("/index")
 async def delete_index(repository_url: str):
     """
     Delete repository index
-
-    Args:
-        repository_url: GitHub repository URL
-
-    Returns:
-        Deletion result
     """
     try:
-        owner, repo_name = github_service.parse_repo_url(repository_url)
+        # --- DEĞİŞİKLİK ---
+        git_service = get_git_service(repository_url)
+        owner, repo_name = git_service.parse_repo_url(repository_url)
+        # ------------------
+        
         full_repo_name = f"{owner}/{repo_name}"
 
         success = rag_service.delete_index(full_repo_name)

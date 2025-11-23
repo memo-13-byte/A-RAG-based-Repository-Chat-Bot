@@ -8,7 +8,7 @@ import logging
 from .chromadb_service import chroma_service
 from .embedding_service import embeddings_service
 from .document_processor import document_processor
-from .github_service import github_service
+from .git_factory import get_git_service
 from .llm_service import llm_service
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class RAGService:
         self.chroma = chroma_service
         self.embeddings = embeddings_service
         self.processor = document_processor
-        self.github = github_service
+        # self.github satırı SİLİNDİ. Artık dinamik seçilecek.
         self.llm = llm_service
 
         logger.info("RAG Service initialized")
@@ -45,23 +45,16 @@ class RAGService:
     ) -> Dict[str, Any]:
         """
         Index a repository for RAG
-
-        Args:
-            repo_url: GitHub repository URL
-            include_readme: Whether to index README
-            include_code_files: Whether to index code files
-            max_files: Maximum number of code files to index
-            chunk_size: Chunk size for documents
-            force_reindex: Re-index even if collection exists
-
-        Returns:
-            Dictionary with indexing results
         """
         try:
+            # --- YENİ: URL'ye göre doğru servisi (GitHub/GitLab) seç ---
+            git_service = get_git_service(repo_url)
+            # -----------------------------------------------------------
+            
             logger.info(f"Starting repository indexing: {repo_url}")
 
-            # Get repository info
-            repo_info = self.github.get_repository_info(repo_url)
+            # Get repository info (git_service kullanılarak)
+            repo_info = git_service.get_repository_info(repo_url)
             repo_name = repo_info["full_name"]
             collection_name = repo_name.replace("/", "_").replace("-", "_").lower()
 
@@ -88,7 +81,8 @@ class RAGService:
             # 1. Index README
             if include_readme:
                 logger.info("Processing README...")
-                readme = self.github.get_readme(repo_url)
+                # git_service kullanıldı
+                readme = git_service.get_readme(repo_url)
 
                 if readme:
                     readme_chunks = self.processor.process_readme(readme, repo_name)
@@ -102,8 +96,8 @@ class RAGService:
                 logger.info(f"Processing code files (max {max_files})...")
 
                 try:
-                    # Get file tree
-                    files = self.github.get_file_tree(repo_url, path="")
+                    # Get file tree (git_service kullanıldı)
+                    files = git_service.get_file_tree(repo_url, path="")
 
                     # Filter processable files
                     processable_files = [
@@ -115,8 +109,8 @@ class RAGService:
 
                     for file_info in processable_files:
                         try:
-                            # Get file content
-                            content = self.github.get_file_content(repo_url, file_info["path"])
+                            # Get file content (git_service kullanıldı)
+                            content = git_service.get_file_content(repo_url, file_info["path"])
 
                             if not content:
                                 continue
@@ -159,11 +153,6 @@ class RAGService:
             for i, chunk in enumerate(all_chunks):
                 metadata = chunk.metadata if chunk.metadata else {}
 
-                # Debug log
-                if not metadata or metadata == {}:
-                    print(f"EMPTY METADATA at chunk {i}: {chunk.chunk_id}")
-
-                # Ensure non-empty
                 if not metadata:
                     metadata = {
                         "source": "unknown",
@@ -173,8 +162,7 @@ class RAGService:
 
                 # Ensure required fields
                 if "source" not in metadata:
-                    metadata["source"] = chunk.chunk_id.split("_chunk_")[
-                        0] if "_chunk_" in chunk.chunk_id else "unknown"
+                    metadata["source"] = chunk.chunk_id.split("_chunk_")[0] if "_chunk_" in chunk.chunk_id else "unknown"
                 if "type" not in metadata:
                     metadata["type"] = "document"
                 if "repository" not in metadata:
@@ -184,24 +172,14 @@ class RAGService:
                 clean_metadata = {}
                 for key, value in metadata.items():
                     if isinstance(value, (int, float)):
-                        clean_metadata[key] = str(value)  # chunk_index: 0 -> "0"
+                        clean_metadata[key] = str(value)
                     else:
                         clean_metadata[key] = str(value) if value is not None else "null"
 
                 metadata = clean_metadata
-
-                # Double check before adding
-                if not metadata or len(metadata) == 0:
-                    print(f"STILL EMPTY after fixes! chunk {i}")
-                    metadata = {"source": "emergency_default", "type": "document", "repository": repo_name}
-
                 metadatas.append(metadata)
 
             ids = [chunk.chunk_id for chunk in all_chunks]
-
-            # Debug: Print first metadata
-            print(f"Sample metadata (first chunk): {metadatas[0]}")
-            print(f"Total chunks: {len(all_chunks)}, metadatas: {len(metadatas)}")
 
             # Generate embeddings
             embeddings_array = self.embeddings.encode(documents, show_progress=True)
@@ -209,18 +187,7 @@ class RAGService:
 
             # 5. Store in ChromaDB
             logger.info(f"Storing in ChromaDB collection: {collection_name}")
-            # BEFORE sending to ChromaDB
-            print("\nFINAL DEBUG BEFORE ChromaDB:")
-            print(f"Documents count: {len(documents)}")
-            print(f"Metadatas count: {len(metadatas)}")
-            print(f"Embeddings count: {len(embeddings_list)}")
-
-            for i in range(min(3, len(metadatas))):
-                print(f"\n  Item {i}:")
-                print(f"    Doc: {documents[i][:50]}...")
-                print(f"    Meta: {metadatas[i]}")
-                print(f"    Embedding: {embeddings_list[i][:3]}... (dim: {len(embeddings_list[i])})")
-
+            
             success = self.chroma.add_documents(
                 collection_name=collection_name,
                 documents=documents,
@@ -265,15 +232,6 @@ class RAGService:
     ) -> Dict[str, Any]:
         """
         Search for relevant code snippets using semantic search
-
-        Args:
-            query: Search query
-            repo_name: Repository name (e.g., 'langchain-ai/langchain')
-            n_results: Number of results to return
-            language_filter: Optional language filter (e.g., "python")
-
-        Returns:
-            Dictionary with search results
         """
         try:
             logger.info(f"Searching: '{query[:50]}...'")
@@ -340,15 +298,6 @@ class RAGService:
     ) -> Dict[str, Any]:
         """
         Query repository using RAG (Retrieve + Generate)
-
-        Args:
-            repo_name: Repository name (e.g., 'langchain-ai/langchain')
-            question: User question
-            n_results: Number of context chunks to retrieve
-            use_llm: Use LLM for generation (fallback to template if False)
-
-        Returns:
-            Dictionary with answer, context, and sources
         """
         try:
             logger.info(f"RAG Query: {question[:50]}...")
@@ -441,13 +390,6 @@ Instructions:
     ) -> str:
         """
         Generate template-based answer without LLM (fallback)
-
-        Args:
-            query: User query
-            contexts: Retrieved context documents
-
-        Returns:
-            Template-based answer string
         """
         # Extract file information
         files = list(set(ctx['metadata']['source'] for ctx in contexts))
@@ -461,7 +403,7 @@ Instructions:
             similarity = f"{ctx['similarity']:.0%}"
 
             answer += f"{i}. **{file_path}** ({ctx['metadata'].get('language', 'unknown')}) - {similarity} match\n"
-            answer += f"   {content_preview}...\n\n"
+            answer += f"    {content_preview}...\n\n"
 
         answer += f"These files primarily use {', '.join(languages)} and are most relevant to your query."
 
@@ -470,12 +412,6 @@ Instructions:
     def get_index_status(self, repo_name: str) -> Dict[str, Any]:
         """
         Get indexing status for a repository
-
-        Args:
-            repo_name: Repository name
-
-        Returns:
-            Dictionary with index status
         """
         try:
             collection_name = repo_name.replace("/", "_").replace("-", "_").lower()
@@ -500,12 +436,6 @@ Instructions:
     def delete_index(self, repo_name: str) -> bool:
         """
         Delete repository index
-
-        Args:
-            repo_name: Repository name
-
-        Returns:
-            True if successful
         """
         try:
             collection_name = repo_name.replace("/", "_").replace("-", "_").lower()
@@ -521,85 +451,14 @@ Instructions:
             return False
 
     def list_indexed_repositories(self) -> List[str]:
-        """
-        List all indexed repositories
-
-        Returns:
-            List of collection names
-        """
+        """List all indexed repositories"""
         return self.chroma.list_collections()
 
     def get_collection_info(self, repo_name: str) -> Dict[str, Any]:
-        """
-        Get information about an indexed repository
-
-        Args:
-            repo_name: Repository name
-
-        Returns:
-            Dictionary with collection information
-        """
+        """Get information about an indexed repository"""
         collection_name = repo_name.replace("/", "_").replace("-", "_").lower()
         return self.chroma.get_collection_stats(collection_name)
 
 
 # Singleton instance
 rag_service = RAGService()
-
-
-# Test function
-def test_rag_service():
-    """Test RAG service end-to-end"""
-    print("=" * 80)
-    print("Testing Ultimate RAG Service")
-    print("=" * 80)
-
-    # Test repository (small for quick test)
-    repo_url = "https://github.com/psf/requests"
-
-    # 1. Index repository
-    print("\nIndexing repository (README only)...")
-    result = rag_service.index_repository(
-        repo_url=repo_url,
-        include_readme=True,
-        include_code_files=False
-    )
-
-    print(f"Status: {result['status']}")
-    print(f"Indexed chunks: {result.get('document_count', 0)}")
-
-    if result['status'] == 'success':
-        repo_name = result['repository']
-
-        # 2. Check status
-        print("\nChecking index status...")
-        status = rag_service.get_index_status(repo_name)
-        print(f"Repository: {status['repository']}")
-        print(f"Indexed: {status['indexed']}")
-        print(f"Total chunks: {status['total_chunks']}")
-
-        # 3. Test search
-        print("\nTesting semantic search...")
-        search_results = rag_service.search("HTTP requests", repo_name, n_results=3)
-        print(f"Found {search_results['count']} results")
-        if search_results['results']:
-            print(f"Top result: {search_results['results'][0]['metadata']['source']}")
-
-        # 4. Test RAG query
-        print("\nTesting RAG query...")
-        question = "What is this library used for?"
-
-        response = rag_service.query(repo_name, question, n_results=2, use_llm=True)
-
-        print(f"\nQuestion: {question}")
-        print(f"Answer: {response['answer'][:200]}...")
-        print(f"\nSources: {', '.join([s['file_path'] for s in response['sources']])}")
-
-        # 5. Cleanup
-        print("\nCleaning up...")
-        rag_service.delete_index(repo_name)
-        print("Test complete!")
-
-
-if __name__ == "__main__":
-    test_rag_service()
