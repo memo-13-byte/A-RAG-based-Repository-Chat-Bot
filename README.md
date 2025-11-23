@@ -57,7 +57,7 @@ Combines retrieval techniques with knowledge graphs to answer developer queries 
 
 ## 🛠️ Technology Stack
 
-**Backend**: FastAPI, Python 3.11+, PyGithub, LangChain  
+**Backend**: FastAPI, Python 3.11+, PyGithub, LangChain, python-gitlab  
 **Frontend**: React 18+, Vite, Tailwind CSS  
 **AI/ML**: OpenAI GPT, LangChain, tiktoken
 
@@ -72,6 +72,7 @@ Combines retrieval techniques with knowledge graphs to answer developer queries 
 
 ### API Keys
 - **GitHub Token** (Required - Free)
+- **Gitlab Token** (Required - Free)
 - **OpenAI API Key** (Optional - $5-10 recommended)
 
 ---
@@ -83,7 +84,7 @@ Combines retrieval techniques with knowledge graphs to answer developer queries 
 ```powershell
 # Clone and navigate
 git clone https://github.com/your-username/RepoWise.git
-cd RepoWise/Repowise-backend
+cd A-RAG-based-Repository-Chat-Bot/Repowise-backend
 
 # Create virtual environment (Python 3.11/3.12!)
 python -m venv .venv
@@ -118,7 +119,7 @@ Visit: http://127.0.0.1:8000 (API) and http://127.0.0.1:8000/docs (Swagger)
 
 ```powershell
 # New terminal
-cd RepoWise/repowise-frontend
+cd A-RAG-based-Repository-Chat-Bot/repowise-frontend
 
 # Install and run
 npm install
@@ -138,6 +139,13 @@ Visit: http://localhost:5173
 3. Select scopes: `repo`, `read:user`
 4. Copy token (starts with `ghp_`)
 5. Add to `.env`: `GITHUB_TOKEN=ghp_...`
+
+### GitLab Setup
+1. Go to: https://gitlab.com/-/user_settings/personal_access_tokens
+2. Select "Add new token"
+3. Select scopes: read_api, read_repository (at least these two are mandatory)
+4. Copy token (starts with glpat-)
+5. Add to `.env`: `GITLAB_TOKEN=ghp_...`
 
 ### OpenAI API Key (Optional)
 
@@ -351,7 +359,7 @@ MIT License - see [LICENSE](LICENSE) file
 
 **Version**: 0.1.0 (Phase 1 Complete)  
 **Status**: ✅ Production Ready  
-**Last Updated**: November 14, 2025
+**Last Updated**: November 24, 2025
 
 ---
 
