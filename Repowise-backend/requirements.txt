@@ -1,0 +1,93 @@
+# ===================================================================
+# RepoWise Backend - Python Dependencies
+# Phase 2: RAG Pipeline with ChromaDB and CodeBERT
+# ===================================================================
+
+# ============== Phase 1: Core Dependencies (ACTIVE) ==============
+
+# FastAPI and Server Components
+fastapi==0.121.0
+uvicorn[standard]==0.38.0
+python-multipart==0.0.20
+pydantic==2.12.4
+pydantic-settings>=2.8.0
+
+# Environment Variables and Configuration
+python-dotenv==1.2.1
+
+# GitHub API Integration
+PyGithub==2.4.0
+GitPython==3.1.43
+requests==2.32.3
+
+# LLM and Language Models
+langchain==0.1.0
+langchain-core==0.1.53
+langchain-community==0.0.38
+langchain-openai==0.0.5
+tiktoken==0.5.2
+
+# HTTP Client
+aiohttp>=3.9.0
+
+# ============== Phase 2: RAG Pipeline (NEW!) ==============
+
+# Vector Database
+chromadb==0.4.22
+# Note: ChromaDB includes its own SQLite backend
+
+# Code Embeddings - Multiple Options:
+
+# Option 1: Sentence Transformers (Recommended for CodeBERT)
+sentence-transformers==2.3.1
+# Includes: transformers, torch, tokenizers
+
+# Option 2: HuggingFace Transformers (Direct)
+transformers==4.37.2
+
+# PyTorch (Required for embeddings)
+torch==2.2.0
+# Note: CPU version, for GPU use torch with CUDA
+
+# Text Processing
+nltk==3.8.1
+
+# Code Parsing
+tree-sitter==0.21.0
+tree-sitter-python==0.21.0
+tree-sitter-javascript==0.21.0
+
+# Utilities
+numpy>=1.24.0
+pandas>=2.0.0
+
+# ============== Phase 3: Knowledge Graph (Coming Soon) ==============
+# neo4j>=5.0.0
+# py2neo>=2021.2.3
+
+# ============== Development and Testing (Optional) ==============
+# pytest>=7.4.0
+# pytest-asyncio>=0.21.0
+# httpx>=0.24.0
+# black>=23.0.0
+# flake8>=6.0.0
+
+# ===================================================================
+# Installation Commands:
+#
+# Full install (Phase 1 + 2):
+#   pip install -r requirements.txt
+#
+# ChromaDB only:
+#   pip install chromadb==0.4.22
+#
+# CodeBERT embeddings:
+#   pip install sentence-transformers==2.3.1
+#
+# PyTorch CPU (faster install):
+#   pip install torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu
+#
+# Check installation:
+#   python -c "import chromadb; print(chromadb.__version__)"
+#   python -c "from sentence_transformers import SentenceTransformer; print('OK')"
+# ===================================================================

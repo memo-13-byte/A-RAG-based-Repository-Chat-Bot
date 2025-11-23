@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI(
     title="RepoWise API",
     description="RAG-Based Repository Chatbot API",
-    version="1.0.0"
+    version="2.0.0"  # Phase 2!
 )
 
 # CORS middleware - Frontend için gerekli
@@ -22,7 +22,8 @@ async def root():
     return {
         "message": "RepoWise API is running!",
         "status": "healthy",
-        "version": "1.0.0"
+        "version": "2.0.0",
+        "phase": "Phase 2 - RAG Pipeline Complete"
     }
 
 @app.get("/health")
@@ -31,7 +32,8 @@ async def health_check():
     return {"status": "ok"}
 
 # API routes
-from .api import chat, repository
+from .api import chat, repository, rag_endpoints  # ← RAG ekle!
 
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(repository.router, prefix="/api/repository", tags=["repository"])
+app.include_router(rag_endpoints.router, prefix="/api/rag", tags=["RAG Pipeline"])
