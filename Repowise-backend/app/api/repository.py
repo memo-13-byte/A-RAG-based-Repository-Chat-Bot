@@ -165,7 +165,7 @@ async def get_repository_files(
         path: str = Query("", description="Path within the repository (e.g., 'src/components')")
 ):
     """
-    Get the repository's file tree (FIXED: uses query parameters)
+    Get the repository's file tree (Phase 2: uses query parameters)
 
     Args:
         repo_name: Repository full name (e.g., 'langchain-ai/langchain')
@@ -260,6 +260,56 @@ async def get_repository_files(
             status_code=500,
             detail=f"Failed to fetch files: {str(e)}"
         )
+
+
+# ============================================================================
+# LEGACY ENDPOINT: Phase 1 Frontend Compatibility
+# ============================================================================
+# IMPORTANT: This endpoint maintains backward compatibility with Phase 1 frontend.
+# It will be removed in Phase 3. Please migrate to the new query-parameter version.
+# ============================================================================
+
+@router.get("/{repo_name}/files", response_model=FileTreeResponse)
+async def get_repository_files_legacy(
+        repo_name: str,
+        path: str = Query("", description="Path within the repository")
+):
+    """
+    Legacy endpoint for Phase 1 frontend compatibility
+
+    DEPRECATED: This endpoint is maintained for backward compatibility with Phase 1 frontend.
+    New code should use GET /files with query parameters instead.
+
+    Args:
+        repo_name: Repository full name (path parameter, e.g., 'langchain-ai/langchain')
+        path: Optional path within the repository (query parameter)
+
+    Returns:
+        List of files and directories with metadata
+
+    Examples:
+        Phase 1 (Legacy):
+            GET /api/repository/langchain-ai/langchain/files
+            GET /api/repository/langchain-ai/langchain/files?path=libs
+
+        Phase 2 (Current - Recommended):
+            GET /api/repository/files?repo_name=langchain-ai/langchain
+            GET /api/repository/files?repo_name=langchain-ai/langchain&path=libs
+
+    Migration Notice:
+        This endpoint will be REMOVED in Phase 3.
+        Please update your frontend to use the new query parameter format.
+
+    Deprecation Timeline:
+        - Phase 2: Both endpoints work (current)
+        - Phase 3: Legacy endpoint removed
+    """
+    logger.info(f"[LEGACY] File tree endpoint called - repo_name: '{repo_name}', path: '{path}'")
+    logger.warning(f"[DEPRECATION WARNING] Legacy endpoint /{repo_name}/files is deprecated. "
+                   f"Use /files?repo_name={repo_name}&path={path} instead.")
+
+    # Delegate to the new implementation
+    return await get_repository_files(repo_name=repo_name, path=path)
 
 
 @router.delete("/{repo_name}")

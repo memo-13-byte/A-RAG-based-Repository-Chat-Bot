@@ -1,217 +1,302 @@
-import { useState, useRef, useEffect } from "react"
-import { Send, Bot, User, Loader2 } from "lucide-react"
-import { useMutation } from "@tanstack/react-query"
-import { chatAPI } from "../services/api"
-import ReactMarkdown from "react-markdown"
+import React, { useState, useEffect } from 'react';
+import { chatAPI, repositoryAPI, ragAPI, isRAGAvailable } from '../services/api';
 
-export default function ChatWindow({ selectedRepository }) {
-  const [messages, setMessages] = useState([])
-  const [inputMessage, setInputMessage] = useState("")
-  const [conversationId, setConversationId] = useState(null)
-  const messagesEndRef = useRef(null)
+/**
+ * Enhanced Chat Window Component - Phase 2
+ *
+ * New Features:
+ * - RAG-powered responses for code questions
+ * - Auto-indexing capability
+ * - Index status display
+ * - Semantic code search
+ */
+const EnhancedChatWindow = ({ selectedRepository }) => {
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [conversationId, setConversationId] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [ragEnabled, setRagEnabled] = useState(true);
+  const [autoIndex, setAutoIndex] = useState(true);
+  const [indexStatus, setIndexStatus] = useState(null);
+  const [isIndexing, setIsIndexing] = useState(false);
 
-  // Scroll to bottom when new message arrives
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
-
+  // Check RAG status when repository changes
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+    if (selectedRepository) {
+      checkIndexStatus();
+    }
+  }, [selectedRepository]);
 
-  const generateMessageId = () => `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  // Check if repository is indexed
+  const checkIndexStatus = async () => {
+    if (!selectedRepository) return;
+    try {
+        const status = await chatAPI.getIndexStatus(selectedRepository.url); // URL string
+        setIndexStatus(status);
+    } catch (error) {
+        console.error('Error checking index status:', error);
+        setIndexStatus(null);
+    }
+  };
 
-  // Send message mutation
-  const sendMessageMutation = useMutation({
-    mutationFn: ({ message, repoUrl, convId }) => chatAPI.sendMessage(message, repoUrl, convId),
-    onSuccess: (data) => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: generateMessageId(),
-          role: "assistant",
-          content: data.message,
-          sources: data.sources,
-          confidence: data.confidence,
-        },
-      ])
+  // Manually index repository
+  const handleManualIndex = async () => {
+    if (!selectedRepository || isIndexing) return;
+    setIsIndexing(true);
+    try {
+      const result = await chatAPI.indexRepository(selectedRepository.url, true, 50); // URL string
+      console.log('Indexing result:', result);
+      await checkIndexStatus();
+      alert(`Successfully indexed! ${result.document_count || 0} chunks created.`);
+    } catch (error) {
+      console.error('Error indexing repository:', error);
+      alert('Failed to index repository. Check console for details.');
+    } finally {
+      setIsIndexing(false);
+    }
+  };
+  // Send message with Phase 2 features
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim()) return;
 
-      // Set conversation ID
-      if (data.conversation_id) {
-        setConversationId(data.conversation_id)
+    const userMessage = inputMessage.trim();
+    setInputMessage('');
+    setLoading(true);
+
+    // Add user message to chat
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', content: userMessage, timestamp: new Date().toISOString() },
+    ]);
+
+    try {
+      // Phase 2: Send with RAG options
+      const response = await chatAPI.sendMessage(
+        userMessage,
+        selectedRepository.url,
+        conversationId,
+        ragEnabled,      // Enable RAG
+        autoIndex        // Auto-index if needed
+      );
+
+      // Save conversation ID
+      if (!conversationId) {
+        setConversationId(response.conversation_id);
       }
-    },
-    onError: (error) => {
-      console.error("Error sending message:", error)
+
+      // Add assistant response to chat
       setMessages((prev) => [
         ...prev,
         {
-          id: generateMessageId(),
-          role: "assistant",
-          content: "I am sorry, an error happened. Please try again.",
-          isError: true,
+          role: 'assistant',
+          content: response.message,
+          sources: response.sources || [],
+          confidence: response.confidence || 0,
+          rag_used: response.rag_used || false,
+          indexed_chunks: response.indexed_chunks || null,
+          timestamp: new Date().toISOString(),
         },
-      ])
-    },
-  })
+      ]);
 
-  const handleSendMessage = () => {
-    if (!inputMessage.trim() || sendMessageMutation.isPending) return
-
-    const userMessage = {
-      id: generateMessageId(),
-      role: "user",
-      content: inputMessage,
+      // Update index status if auto-indexed
+      if (response.indexed_chunks > 0) {
+        await checkIndexStatus();
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'error',
+          content: 'Failed to get response. Please try again.',
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      setLoading(false);
     }
-    setMessages((prev) => [...prev, userMessage])
+  };
 
-    // Send to API
-    sendMessageMutation.mutate({
-      message: inputMessage,
-      repoUrl: selectedRepository?.url,
-      convId: conversationId,
-    })
-
-    // Clear input
-    setInputMessage("")
-  }
-
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
-    }
-  }
-
-  return (
-    <div className="flex flex-col h-full bg-white rounded-lg shadow-lg">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-primary-500 to-primary-600">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-white">
-              {selectedRepository ? selectedRepository.name : "RepoWise Chat"}
-            </h2>
-            {selectedRepository && <p className="text-sm text-gray-500 mt-1">{selectedRepository.url}</p>}
+  // Render message with Phase 2 metadata
+  const renderMessage = (message, index) => {
+    if (message.role === 'user') {
+      return (
+        <div key={index} className="flex justify-end mb-4">
+          <div className="bg-blue-500 text-white rounded-lg px-4 py-2 max-w-[70%]">
+            <p>{message.content}</p>
           </div>
         </div>
+      );
+    }
+
+    if (message.role === 'assistant') {
+      return (
+        <div key={index} className="flex justify-start mb-4">
+          <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 max-w-[70%]">
+            <p className="mb-2">{message.content}</p>
+
+            {/* Phase 2: Show RAG metadata */}
+            <div className="mt-2 pt-2 border-t border-gray-300 text-xs">
+              {/* RAG Status */}
+              {message.rag_used && (
+                <div className="mb-1 text-green-600 font-semibold">
+                  ✓ RAG-Powered Response
+                </div>
+              )}
+
+              {/* Auto-indexed indicator */}
+              {message.indexed_chunks > 0 && (
+                <div className="mb-1 text-blue-600">
+                  📚 Auto-indexed: {message.indexed_chunks} chunks
+                </div>
+              )}
+
+              {/* Confidence Score */}
+              {message.confidence > 0 && (
+                <div className="mb-1">
+                  Confidence: {(message.confidence * 100).toFixed(0)}%
+                </div>
+              )}
+
+              {/* Sources */}
+              {message.sources && message.sources.length > 0 && (
+                <div className="mt-1">
+                  <strong>Sources:</strong>
+                  <ul className="list-disc list-inside">
+                    {message.sources.map((source, idx) => (
+                      <li key={idx}>{source}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header with Index Status */}
+      <div className="bg-gray-100 p-4 border-b">
+        <h2 className="text-xl font-bold mb-2">Chat</h2>
+
+        {selectedRepository && (
+          <div className="flex items-center justify-between">
+            {/* Index Status */}
+            <div className="flex items-center space-x-2">
+              {indexStatus ? (
+                <>
+                  {indexStatus.indexed ? (
+                    <span className="text-green-600 text-sm">
+                      ✓ Indexed ({indexStatus.total_chunks} chunks)
+                    </span>
+                  ) : (
+                    <span className="text-yellow-600 text-sm">
+                      ⚠ Not indexed
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-gray-500 text-sm">Checking...</span>
+              )}
+
+              {/* Manual Index Button */}
+              <button
+                onClick={handleManualIndex}
+                disabled={isIndexing || (indexStatus && indexStatus.indexed)}
+                className="text-xs bg-blue-500 text-white px-2 py-1 rounded disabled:bg-gray-400"
+              >
+                {isIndexing ? 'Indexing...' : 'Index Now'}
+              </button>
+            </div>
+
+            {/* RAG Toggle */}
+            <div className="flex items-center space-x-2 text-sm">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={ragEnabled}
+                  onChange={(e) => setRagEnabled(e.target.checked)}
+                  className="mr-2"
+                />
+                RAG Mode
+              </label>
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoIndex}
+                  onChange={(e) => setAutoIndex(e.target.checked)}
+                  className="mr-2"
+                />
+                Auto-Index
+              </label>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        {messages.length === 0 && !selectedRepository && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-lg font-medium text-gray-700 mb-2">Select a repository to start chatting</h3>
-            <p className="text-sm text-gray-500">Choose a repository from the left sidebar</p>
+      <div className="flex-1 overflow-y-auto p-4">
+        {messages.length === 0 ? (
+          <div className="text-center text-gray-500 mt-8">
+            <p>No messages yet. Start a conversation!</p>
+            {ragEnabled && selectedRepository && (
+              <p className="text-sm mt-2">
+                💡 RAG mode is enabled. Ask questions about code!
+              </p>
+            )}
           </div>
+        ) : (
+          messages.map((message, index) => renderMessage(message, index))
         )}
 
-        {messages.length === 0 && selectedRepository && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-lg font-medium text-gray-700 mb-2">Welcome to the RepoWise!</h3>
-            <p className="text-sm">Begin to ask question about the Repository...</p>
-          </div>
-        )}
-
-        {messages.map((message) => (
-          <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div
-              className={`flex items-start space-x-3 max-w-3xl ${
-                message.role === "user" ? "flex-row-reverse space-x-reverse" : ""
-              }`}
-            >
-              {/* Avatar */}
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  message.role === "user" ? "bg-primary-500" : message.isError ? "bg-red-500" : "bg-gray-200"
-                }`}
-              >
-                {message.role === "user" ? (
-                  <User className="w-5 h-5 text-white" />
-                ) : (
-                  <Bot className={`w-5 h-5 ${message.isError ? "text-white" : "text-gray-600"}`} />
-                )}
-              </div>
-
-              {/* Message Content */}
-              <div
-                className={`px-4 py-3 rounded-lg ${
-                  message.role === "user"
-                    ? "bg-primary-500 text-white"
-                    : message.isError
-                      ? "bg-red-50 text-red-900 border border-red-200"
-                      : "bg-gray-100 text-gray-900"
-                }`}
-              >
-                <div className="prose prose-sm max-w-none">
-                  <ReactMarkdown>{message.content}</ReactMarkdown>
-                </div>
-
-                {/* Sources and Confidence */}
-                {message.sources && message.sources.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <p className="text-xs text-gray-500 mb-2">Sources:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {message.sources.map((source) => (
-                        <span key={source} className="text-xs bg-white px-2 py-1 rounded border border-gray-300">
-                          {source}
-                        </span>
-                      ))}
-                    </div>
-                    {message.confidence && (
-                      <p className="text-xs text-gray-500 mt-2">Confidence: {(message.confidence * 100).toFixed(0)}%</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-
-        {/* Loading indicator */}
-        {sendMessageMutation.isPending && (
-          <div className="flex justify-start">
-            <div className="flex items-start space-x-3">
-              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                <Bot className="w-5 h-5 text-gray-600" />
-              </div>
-              <div className="bg-gray-100 px-4 py-3 rounded-lg">
-                <Loader2 className="w-5 h-5 animate-spin text-gray-600" />
-              </div>
+        {loading && (
+          <div className="flex justify-start mb-4">
+            <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2">
+              <p>Thinking...</p>
             </div>
           </div>
         )}
-
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <div className="px-6 py-4 border-t border-gray-200">
+      <div className="bg-gray-100 p-4 border-t">
         <div className="flex space-x-2">
-          <textarea
+          <input
+            type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            onKeyDown={handleKeyPress}
-            placeholder={selectedRepository ? "Ask a question about the repository..." : "Select a repository first..."}
-            disabled={!selectedRepository || sendMessageMutation.isPending}
-            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none text-sm disabled:bg-gray-50 disabled:cursor-not-allowed"
-            rows={3}
+            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+            placeholder={
+              selectedRepository
+                ? 'Ask anything about this repository...'
+                : 'Select a repository first...'
+            }
+            disabled={!selectedRepository || loading}
+            className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
           />
           <button
             onClick={handleSendMessage}
-            disabled={!selectedRepository || !inputMessage.trim() || sendMessageMutation.isPending}
-            className="px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+            disabled={!selectedRepository || loading || !inputMessage.trim()}
+            className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {sendMessageMutation.isPending ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Send className="w-5 h-5" />
-            )}
+            Send
           </button>
         </div>
+
+        {/* Tips */}
+        {selectedRepository && ragEnabled && (
+          <p className="text-xs text-gray-500 mt-2">
+            💡 Tip: Ask "how to use this library" or "explain this function" for RAG-powered answers
+          </p>
+        )}
       </div>
     </div>
-  )
-}
+  );
+};
+
+export default EnhancedChatWindow;
