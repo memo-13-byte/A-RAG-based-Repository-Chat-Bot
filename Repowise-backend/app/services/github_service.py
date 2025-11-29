@@ -1,6 +1,7 @@
 """
 GitHub Service - GitHub API Integration
 Handles all GitHub API interactions with comprehensive error handling and logging
+FIXED: Safe attribute access for compatibility with all repository types
 """
 
 import logging
@@ -100,27 +101,35 @@ class GitHubService:
 
             repo = self.client.get_repo(f"{owner}/{repo_name}")
 
+            # Helper function for safe attribute access
+            def safe_get(obj, attr, default=None):
+                """Safely get attribute with fallback"""
+                try:
+                    return getattr(obj, attr, default)
+                except:
+                    return default
+
             return {
-                "id": repo.id,
-                "name": repo.name,
-                "full_name": repo.full_name,
-                "url": repo.html_url,
-                "description": repo.description or "No description provided",
-                "language": repo.language or "Not specified",
-                "stars": repo.stargazers_count,
-                "forks": repo.forks_count,
-                "open_issues": repo.open_issues_count,
-                "created_at": repo.created_at.isoformat() if repo.created_at else None,
-                "updated_at": repo.updated_at.isoformat() if repo.updated_at else None,
-                "pushed_at": repo.pushed_at.isoformat() if repo.pushed_at else None,
-                "topics": repo.get_topics(),
-                "default_branch": repo.default_branch,
-                "size": repo.size,  # Size in KB
-                "license": repo.license.name if repo.license else None,
-                "private": repo.private,
-                "archived": repo.archived,
-                "disabled": repo.disabled,
-                "homepage": repo.homepage,
+                "id": safe_get(repo, 'id', 0),
+                "name": safe_get(repo, 'name', 'Unknown'),
+                "full_name": safe_get(repo, 'full_name', 'Unknown'),
+                "url": safe_get(repo, 'html_url', repo_url),
+                "description": safe_get(repo, 'description') or "No description provided",
+                "language": safe_get(repo, 'language') or "Not specified",
+                "stars": safe_get(repo, 'stargazers_count', 0),
+                "forks": safe_get(repo, 'forks_count', 0),
+                "open_issues": safe_get(repo, 'open_issues_count', 0),
+                "created_at": repo.created_at.isoformat() if safe_get(repo, 'created_at') else None,
+                "updated_at": repo.updated_at.isoformat() if safe_get(repo, 'updated_at') else None,
+                "pushed_at": repo.pushed_at.isoformat() if safe_get(repo, 'pushed_at') else None,
+                "topics": safe_get(repo, 'get_topics', lambda: [])() if hasattr(repo, 'get_topics') else [],
+                "default_branch": safe_get(repo, 'default_branch', 'main'),
+                "size": safe_get(repo, 'size', 0),  # Size in KB
+                "license": repo.license.name if safe_get(repo, 'license') and repo.license else None,
+                "private": safe_get(repo, 'private', False),
+                "archived": safe_get(repo, 'archived', False),
+                "disabled": safe_get(repo, 'disabled', False),  # ← SAFE!
+                "homepage": safe_get(repo, 'homepage', ''),
             }
 
         except GithubException as e:

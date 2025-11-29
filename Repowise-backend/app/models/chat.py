@@ -11,7 +11,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     """Chat request model"""
     message: str = Field(..., min_length=1, max_length=1000, description="Kullanıcı mesajı")
-    repository_url: Optional[str] = Field(None, description="GitHub repository URL")
+    repository_url: Optional[str] = Field(None, description="GitHub or GitLab repository URL")
     conversation_id: Optional[str] = Field(None, description="Sohbet ID'si")
 
 class ChatResponse(BaseModel):

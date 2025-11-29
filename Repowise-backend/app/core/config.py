@@ -33,8 +33,11 @@ class Settings(BaseSettings):
 
     # ========== API Keys ==========
 
-    # GitHub (REQUIRED)
+    # GitHub (REQUIRED for base functionality)
     GITHUB_TOKEN: Optional[str] = None
+    
+    # GitLab (OPTIONAL - but required for GitLab features)
+    GITLAB_TOKEN: Optional[str] = None  # <--- YENİ EKLENDİ
 
     # LLM Providers (OPTIONAL - at least one recommended)
     GROQ_API_KEY: Optional[str] = None  # FREE - Recommended!
@@ -59,7 +62,7 @@ class Settings(BaseSettings):
     # ========== Application ==========
 
     APP_NAME: str = "RepoWise"
-    APP_VERSION: str = "0.2.0"  # Phase 2
+    APP_VERSION: str = "0.2.1"  # Version bumped for GitLab Support
     DEBUG: bool = True
 
     class Config:
@@ -84,7 +87,7 @@ def validate_settings():
     """
     errors = []
 
-    # GitHub token is REQUIRED
+    # GitHub token is REQUIRED (Core dependency)
     if not settings.GITHUB_TOKEN:
         errors.append("GITHUB_TOKEN is not set (REQUIRED for GitHub API access)")
 
@@ -129,6 +132,14 @@ def print_settings_status():
         print(f"Token: {token_preview}")
     else:
         print(f"Token: NOT SET (REQUIRED!)")
+        
+    # GitLab 
+    print("\nGitLab API:")
+    if settings.GITLAB_TOKEN:
+        token_preview = settings.GITLAB_TOKEN[:10] + "..." if len(settings.GITLAB_TOKEN) > 10 else "******"
+        print(f"Token: {token_preview} (Ready)")
+    else:
+        print(f"Token: NOT SET (GitLab features unavailable)")
 
     # LLM Providers
     print("\nLLM Providers:")
