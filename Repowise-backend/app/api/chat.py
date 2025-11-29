@@ -1,10 +1,18 @@
+"""
+Chat API with RAG Integration
+Combines GitHub data, RAG vector search, and LLM for intelligent repository Q&A
+"""
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 from ..services.github_service import github_service
 from ..services.llm_service import llm_service
+from ..services.rag_service import rag_service
 import logging
+import re
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +26,9 @@ class ChatMessage(BaseModel):
     message: str
     repository_url: Optional[str] = None
     conversation_id: Optional[str] = None
-    use_llm: bool = True  # Toggle LLM usage
+    use_llm: bool = True
+    use_rag: bool = True  # NEW: Enable RAG
+    auto_index: bool = True  # NEW: Auto-index repository if not indexed
 
 
 class ChatResponse(BaseModel):
@@ -26,11 +36,12 @@ class ChatResponse(BaseModel):
     sources: List[str]
     confidence: float
     conversation_id: str
+    rag_used: bool = False  # NEW: Indicates if RAG was used
+    indexed_chunks: Optional[int] = None  # NEW: Number of chunks indexed
 
 
 def generate_conversation_id() -> str:
     """Create unique conversation ID"""
-    import uuid
     return f"conv_{uuid.uuid4().hex[:12]}"
 
 
@@ -45,8 +56,6 @@ def clean_readme_text(readme_content: str, max_length: int = 500) -> str:
     Returns:
         Cleaned text
     """
-    import re
-
     if not readme_content:
         return ""
 
@@ -124,7 +133,7 @@ Last Updated: {repo_info['updated_at'][:10]}
 
     # Add language statistics for language-related questions
     if any(keyword in message_lower for keyword in
-           ["language", "dil", "teknoloji", "technology", "written", "yazılmış"]):
+           ["language", "dil", "teknoloji", "technology", "written", "yazilmis"]):
         try:
             stats = github_service.get_repository_stats(repository_url)
             if stats.get('languages'):
@@ -137,7 +146,7 @@ Last Updated: {repo_info['updated_at'][:10]}
 
     # Add contributor information for contributor-related questions
     if any(keyword in message_lower for keyword in
-           ["who", "kim", "contributor", "develop", "geliştir", "author", "owner"]):
+           ["who", "kim", "contributor", "develop", "gelistir", "author", "owner"]):
         try:
             stats = github_service.get_repository_stats(repository_url)
             if stats.get('contributors_count'):
@@ -152,7 +161,7 @@ Last Updated: {repo_info['updated_at'][:10]}
 
     # Add recent commits for update-related questions
     if any(keyword in message_lower for keyword in
-           ["recent", "son", "last", "commit", "update", "güncel"]):
+           ["recent", "son", "last", "commit", "update", "guncel"]):
         try:
             recent_commits = github_service.get_recent_commits(repository_url, limit=5)
             context += "\nRecent Commits:\n"
@@ -167,6 +176,109 @@ Last Updated: {repo_info['updated_at'][:10]}
         sources.append("Repository metadata")
 
     return context, sources
+
+
+def is_code_question(message_lower: str) -> bool:
+    """
+    Detect if question is about code/implementation
+
+    Args:
+        message_lower: Lowercase user message
+
+    Returns:
+        True if question is code-related
+    """
+    code_keywords = [
+        # English
+        "how to", "how do i", "how can i", "implement", "code", "function",
+        "class", "method", "api", "example", "usage", "use",
+        "install", "setup", "configure", "import", "syntax",
+
+        # Turkish
+        "nasil", "nasil kullan", "kod", "fonksiyon", "sinif",
+        "kullanim", "ornek", "kurulum", "import"
+    ]
+
+    return any(keyword in message_lower for keyword in code_keywords)
+
+
+async def generate_rag_response(
+        message: str,
+        repository_url: str,
+        repo_info: dict,
+        auto_index: bool = True
+) -> tuple[str, List[str], float, bool, int]:
+    """
+    Generate response using RAG (Retrieval-Augmented Generation)
+
+    Args:
+        message: User query
+        repository_url: GitHub repository URL
+        repo_info: Repository info from GitHub
+        auto_index: Auto-index if not indexed
+
+    Returns:
+        (response_text, sources, confidence, rag_used, indexed_chunks)
+    """
+    try:
+        # Parse repo name
+        owner, repo_name = github_service.parse_repo_url(repository_url)
+        full_repo_name = f"{owner}/{repo_name}"
+
+        logger.info(f"Attempting RAG query for: {full_repo_name}")
+
+        # Check if repository is indexed
+        status = rag_service.get_index_status(full_repo_name)
+        indexed_chunks = status.get("total_chunks", 0)
+
+        # Auto-index if not indexed
+        if not status["indexed"] and auto_index:
+            logger.info(f"Repository not indexed, indexing now...")
+
+            index_result = rag_service.index_repository(
+                repo_url=repository_url,
+                include_readme=True,
+                include_code_files=True,  # Index code for better answers
+                max_files=50  # Limit for reasonable performance
+            )
+
+            if index_result["status"] == "success":
+                indexed_chunks = index_result.get("document_count", 0)
+                logger.info(f"Indexed {indexed_chunks} chunks")
+            else:
+                logger.warning(f"Indexing failed: {index_result.get('message')}")
+                return None, [], 0.0, False, 0
+
+        # Query using RAG
+        if status["indexed"] or indexed_chunks > 0:
+            logger.info(f"Querying RAG with {indexed_chunks} chunks...")
+
+            rag_result = rag_service.query(
+                repo_name=full_repo_name,
+                question=message,
+                n_results=3,
+                use_llm=True
+            )
+
+            if rag_result.get("answer"):
+                # Build sources from RAG
+                sources = [s["file_path"] for s in rag_result.get("sources", [])]
+
+                # Add repository context to sources
+                sources.append(f"Repository: {full_repo_name}")
+
+                confidence = rag_result.get("confidence", 0.85)
+
+                logger.info(f"RAG response generated (confidence: {confidence:.2f})")
+
+                return rag_result["answer"], sources, confidence, True, indexed_chunks
+
+        # RAG failed or not applicable
+        return None, [], 0.0, False, indexed_chunks
+
+    except Exception as e:
+        logger.error(f"RAG error: {e}")
+        return None, [], 0.0, False, 0
 
 
 def generate_llm_response(
@@ -200,8 +312,7 @@ Your responsibilities:
 
 Response guidelines:
 - Use **bold** for emphasis on key points
-- Use bullet points (•) or numbered lists for multiple items
-- Use emojis sparingly (⭐ for stars, 🍴 for forks, 🐛 for issues)
+- Use bullet points or numbered lists for multiple items
 - Keep paragraphs short and scannable
 - Include specific numbers and dates when available"""
 
@@ -261,34 +372,34 @@ def generate_rule_based_response(
 
     # "What does it do?" questions
     if any(keyword in message_lower for keyword in
-           ["what does", "what is", "purpose", "ne işe yarar", "ne yapar", "nedir"]):
+           ["what does", "what is", "purpose", "ne ise yarar", "ne yapar", "nedir"]):
         response_parts.append(f"**{repo_info['full_name']}** is a {repo_info['language']} project.")
 
         if repo_info.get('description'):
-            response_parts.append(f"\n\n📝 **Description:** {repo_info['description']}")
+            response_parts.append(f"\n\n**Description:** {repo_info['description']}")
 
         if readme:
             readme_clean = clean_readme_text(readme, max_length=500)
             if readme_clean:
-                response_parts.append(f"\n\n📚 **From README:** {readme_clean}")
+                response_parts.append(f"\n\n**From README:** {readme_clean}")
 
         if repo_info.get('topics'):
             topics = ", ".join(repo_info['topics'][:5])
-            response_parts.append(f"\n\n🏷️ **Topics:** {topics}")
+            response_parts.append(f"\n\n**Topics:** {topics}")
 
         confidence = 0.85
 
     # Statistics questions
     elif any(keyword in message_lower for keyword in
-             ["statistics", "stats", "how many", "kaç", "istatistik", "star", "yıldız"]):
+             ["statistics", "stats", "how many", "kac", "istatistik", "star", "yildiz"]):
         response_parts.append(f"**{repo_info['full_name']}** Statistics:\n\n")
-        response_parts.append(f"⭐ **Stars:** {repo_info['stars']:,}\n")
-        response_parts.append(f"🍴 **Forks:** {repo_info['forks']:,}\n")
-        response_parts.append(f"🐛 **Open Issues:** {repo_info['open_issues']:,}\n")
-        response_parts.append(f"📅 **Last Updated:** {repo_info['updated_at'][:10]}")
+        response_parts.append(f"**Stars:** {repo_info['stars']:,}\n")
+        response_parts.append(f"**Forks:** {repo_info['forks']:,}\n")
+        response_parts.append(f"**Open Issues:** {repo_info['open_issues']:,}\n")
+        response_parts.append(f"**Last Updated:** {repo_info['updated_at'][:10]}")
 
         if repo_info.get('license'):
-            response_parts.append(f"\n📜 **License:** {repo_info['license']}")
+            response_parts.append(f"\n**License:** {repo_info['license']}")
 
         confidence = 0.90
 
@@ -297,16 +408,16 @@ def generate_rule_based_response(
         response_parts.append(f"**{repo_info['full_name']}**\n\n")
 
         if repo_info.get('description'):
-            response_parts.append(f"📝 {repo_info['description']}\n\n")
+            response_parts.append(f"{repo_info['description']}\n\n")
 
-        response_parts.append(f"⭐ Stars: {repo_info['stars']:,}\n")
-        response_parts.append(f"🍴 Forks: {repo_info['forks']:,}\n")
-        response_parts.append(f"💻 Language: {repo_info['language']}")
+        response_parts.append(f"Stars: {repo_info['stars']:,}\n")
+        response_parts.append(f"Forks: {repo_info['forks']:,}\n")
+        response_parts.append(f"Language: {repo_info['language']}")
 
         if readme:
             readme_clean = clean_readme_text(readme, max_length=300)
             if readme_clean:
-                response_parts.append(f"\n\n📚 {readme_clean}")
+                response_parts.append(f"\n\n{readme_clean}")
 
         confidence = 0.80
 
@@ -314,27 +425,31 @@ def generate_rule_based_response(
     return response_text, confidence
 
 
-def generate_smart_response_with_llm(
+async def generate_smart_response(
         message: str,
         repository_url: Optional[str],
-        use_llm: bool = True
-) -> tuple[str, List[str], float]:
+        use_llm: bool = True,
+        use_rag: bool = True,
+        auto_index: bool = True
+) -> tuple[str, List[str], float, bool, int]:
     """
-    Generate intelligent response using GitHub data and LLM
+    Generate intelligent response using GitHub data, RAG, and LLM
 
-    This function:
-    1. Fetches repository data from GitHub
-    2. Builds context based on query type
-    3. Uses LLM to generate natural, context-aware response
-    4. Falls back to rule-based response if LLM fails
+    Workflow:
+    1. Check if question is code-related
+    2. If code-related and use_rag=True -> Try RAG first
+    3. If RAG fails or not code-related -> Use GitHub data + LLM
+    4. Fallback to rule-based if LLM fails
 
     Args:
         message: User query
         repository_url: GitHub repository URL
         use_llm: Whether to use LLM for response generation
+        use_rag: Whether to use RAG for code questions
+        auto_index: Auto-index repository if needed
 
     Returns:
-        (response_text, sources, confidence)
+        (response_text, sources, confidence, rag_used, indexed_chunks)
     """
 
     # Return early if no repository selected
@@ -342,16 +457,40 @@ def generate_smart_response_with_llm(
         return (
             "Please select a repository first to ask questions about it.",
             [],
-            0.0
+            0.0,
+            False,
+            0
         )
 
     try:
         # Fetch repository information from GitHub
         repo_info = github_service.get_repository_info(repository_url)
-        readme = github_service.get_readme(repository_url)
-
-        # Convert message to lowercase for keyword matching
         message_lower = message.lower()
+
+        rag_used = False
+        indexed_chunks = 0
+
+        # Try RAG for code-related questions
+        if use_rag and is_code_question(message_lower):
+            logger.info("Detected code question, trying RAG...")
+
+            rag_response, rag_sources, rag_confidence, rag_success, chunks = await generate_rag_response(
+                message=message,
+                repository_url=repository_url,
+                repo_info=repo_info,
+                auto_index=auto_index
+            )
+
+            if rag_success and rag_response:
+                logger.info("Using RAG response")
+                return rag_response, rag_sources, rag_confidence, True, chunks
+            else:
+                logger.info("RAG failed, falling back to GitHub data")
+
+        # Fallback: Use GitHub data + LLM
+        logger.info("Using GitHub data + LLM")
+
+        readme = github_service.get_readme(repository_url)
 
         # Build context and collect sources
         context, sources = build_repository_context(
@@ -370,19 +509,13 @@ def generate_smart_response_with_llm(
                     sources=sources
                 )
 
-                # Add GitHub API statistics to sources if query is about stats
-                if any(keyword in message_lower for keyword in
-                       ["statistics", "stats", "how many", "kaç", "star", "fork"]):
-                    if "GitHub API statistics" not in sources:
-                        sources.append("GitHub API statistics")
-
-                return response_text, sources, confidence
+                return response_text, sources, confidence, False, 0
 
             except Exception as e:
                 logger.error(f"LLM generation failed, falling back to rule-based: {e}")
-                # Fall through to rule-based response
 
-        # Fallback: Generate rule-based response
+        # Final fallback: Rule-based response
+        logger.info("Using rule-based response")
         response_text, confidence = generate_rule_based_response(
             message_lower=message_lower,
             repo_info=repo_info,
@@ -390,7 +523,7 @@ def generate_smart_response_with_llm(
             sources=sources
         )
 
-        return response_text, sources, confidence
+        return response_text, sources, confidence, False, 0
 
     except Exception as e:
         logger.error(f"Error generating response: {e}")
@@ -400,7 +533,9 @@ def generate_smart_response_with_llm(
             f"**Error:** {str(e)}\n\n"
             f"Please try again or select a different repository.",
             ["Error log"],
-            0.5
+            0.5,
+            False,
+            0
         )
 
 
@@ -412,20 +547,25 @@ async def send_message(chat_message: ChatMessage):
     This endpoint:
     1. Receives user message and repository URL
     2. Maintains conversation history
-    3. Generates context-aware response using LLM
-    4. Returns response with sources and confidence score
+    3. Uses RAG for code questions (if enabled)
+    4. Falls back to GitHub data + LLM
+    5. Returns response with sources and confidence score
 
     Request body:
     - **message**: User's question or query
     - **repository_url**: GitHub repository URL (optional)
     - **conversation_id**: Existing conversation ID (optional)
     - **use_llm**: Whether to use LLM for generation (default: True)
+    - **use_rag**: Whether to use RAG for code questions (default: True)
+    - **auto_index**: Auto-index repository if needed (default: True)
 
     Returns:
     - **message**: Generated response text
     - **sources**: List of information sources used
     - **confidence**: Confidence score (0.0-1.0)
     - **conversation_id**: Conversation identifier
+    - **rag_used**: Whether RAG was used
+    - **indexed_chunks**: Number of chunks indexed (if applicable)
     """
 
     # Create or use existing conversation ID
@@ -447,11 +587,13 @@ async def send_message(chat_message: ChatMessage):
         "timestamp": datetime.now().isoformat(),
     })
 
-    # Generate intelligent response using LLM
-    response_message, sources, confidence = generate_smart_response_with_llm(
+    # Generate intelligent response
+    response_message, sources, confidence, rag_used, indexed_chunks = await generate_smart_response(
         message=chat_message.message,
         repository_url=chat_message.repository_url,
-        use_llm=chat_message.use_llm
+        use_llm=chat_message.use_llm,
+        use_rag=chat_message.use_rag,
+        auto_index=chat_message.auto_index
     )
 
     # Store assistant response in conversation history
@@ -460,6 +602,7 @@ async def send_message(chat_message: ChatMessage):
         "content": response_message,
         "sources": sources,
         "confidence": confidence,
+        "rag_used": rag_used,
         "timestamp": datetime.now().isoformat(),
     })
 
@@ -468,6 +611,8 @@ async def send_message(chat_message: ChatMessage):
         sources=sources,
         confidence=confidence,
         conversation_id=conversation_id,
+        rag_used=rag_used,
+        indexed_chunks=indexed_chunks if indexed_chunks > 0 else None
     )
 
 
@@ -513,3 +658,110 @@ async def delete_conversation(conversation_id: str):
     del conversations[conversation_id]
 
     return {"status": "success", "message": "Conversation deleted successfully"}
+
+
+# RAG Management Endpoints
+
+@router.post("/index")
+async def index_repository(
+        repository_url: str,
+        include_code: bool = True,
+        max_files: int = 50,
+        force_reindex: bool = False
+):
+    """
+    Manually index a repository for RAG
+
+    Args:
+        repository_url: GitHub repository URL
+        include_code: Whether to include code files
+        max_files: Maximum number of files to index
+        force_reindex: Force re-indexing
+
+    Returns:
+        Indexing results
+    """
+    try:
+        logger.info(f"Manual indexing request: {repository_url}")
+
+        result = rag_service.index_repository(
+            repo_url=repository_url,
+            include_readme=True,
+            include_code_files=include_code,
+            max_files=max_files,
+            force_reindex=force_reindex
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error indexing repository: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error indexing repository: {str(e)}"
+        )
+
+
+@router.get("/index-status")
+async def get_index_status(repository_url: str):
+    """
+    Get indexing status for a repository
+
+    Args:
+        repository_url: GitHub repository URL
+
+    Returns:
+        Index status
+    """
+    try:
+        owner, repo_name = github_service.parse_repo_url(repository_url)
+        full_repo_name = f"{owner}/{repo_name}"
+
+        status = rag_service.get_index_status(full_repo_name)
+
+        return status
+
+    except Exception as e:
+        logger.error(f"Error getting index status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting index status: {str(e)}"
+        )
+
+
+@router.delete("/index")
+async def delete_index(repository_url: str):
+    """
+    Delete repository index
+
+    Args:
+        repository_url: GitHub repository URL
+
+    Returns:
+        Deletion result
+    """
+    try:
+        owner, repo_name = github_service.parse_repo_url(repository_url)
+        full_repo_name = f"{owner}/{repo_name}"
+
+        success = rag_service.delete_index(full_repo_name)
+
+        if success:
+            return {
+                "status": "success",
+                "message": f"Index deleted for {full_repo_name}"
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to delete index"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting index: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error deleting index: {str(e)}"
+        )

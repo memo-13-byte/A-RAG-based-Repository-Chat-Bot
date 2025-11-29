@@ -1,7 +1,7 @@
 # Services klasörü - İş mantığı burada olacak
 # Bu klasör şunları içerecek:
 # - rag_pipeline.py: RAG (Retrieval-Augmented Generation) pipeline
-# - llm_service.py (OpenAI/Anthropic) entegrasyonu
+# - llm_service.py (OpenAI) entegrasyonu
 # - kg_service.py: Knowledge Graph (Neo4j) işlemleri
 # - embedding_service.py: Vector embeddings (CodeBERT, DPR)
 # - github_service.py: GitHub API entegrasyonu
