@@ -1,10 +1,12 @@
 import { useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { repositoryAPI } from "../services/api"
-import { Github, Search, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
+import { Github, Search, Loader2, CheckCircle2, AlertCircle, Network } from "lucide-react"
+import api from "../services/api"
 
 export default function RepositorySelector({ onSelectRepository, selectedRepository }) {
   const [repoUrl, setRepoUrl] = useState("")
+  const [errorDetails, setErrorDetails] = useState(null)
 
   // Fetch repositories list
   const {
@@ -21,16 +23,56 @@ export default function RepositorySelector({ onSelectRepository, selectedReposit
     mutationFn: (url) => repositoryAPI.analyzeRepository(url),
     onSuccess: (data) => {
       setRepoUrl("")
+      setErrorDetails(null)
       refetch()
       if (data.repository) {
         onSelectRepository(data.repository)
       }
     },
+    onError: (error) => {
+      console.error('Repository analyze error:', error)
+      console.error('Error response:', error.response?.data)
+
+      const errorMsg = error.response?.data?.detail
+        || error.message
+        || 'Unknown error occurred'
+
+      setErrorDetails({
+        message: errorMsg,
+        status: error.response?.status,
+        url: repoUrl
+      })
+    }
+  })
+
+  // NEW: Graph analyze mutation
+  const analyzeGraphMutation = useMutation({
+    mutationFn: async (repoUrl) => {
+      const response = await api.post('/api/graph/analyze', null, {
+        params: { repository_url: repoUrl }
+      })
+      return response.data
+    },
+    onSuccess: (data) => {
+      console.log('Graph analyzed:', data)
+      alert(`✅ Graph analyzed successfully!\n\nClasses: ${data.statistics?.classes || 0}\nFunctions: ${data.statistics?.functions || 0}\nFiles: ${data.statistics?.processed_files || 0}`)
+    },
+    onError: (error) => {
+      console.error('Graph analyze error:', error)
+      alert(`❌ Graph analyze failed:\n${error.response?.data?.detail || error.message}`)
+    }
   })
 
   const handleAnalyze = () => {
     if (!repoUrl.trim()) return
+    setErrorDetails(null)
     analyzeRepoMutation.mutate(repoUrl)
+  }
+
+  const handleGraphAnalyze = (repoUrl) => {
+    if (confirm('⚠️ Graph analysis can take 1-2 minutes for large repositories.\n\nContinue?')) {
+      analyzeGraphMutation.mutate(repoUrl)
+    }
   }
 
   const handleKeyPress = (e) => {
@@ -73,12 +115,54 @@ export default function RepositorySelector({ onSelectRepository, selectedReposit
             )}
           </button>
         </div>
-        {analyzeRepoMutation.isError && (
-          <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-            <AlertCircle className="w-4 h-4" />
-            Failed to analyze repository
-          </p>
+
+        {/* Error Display */}
+        {analyzeRepoMutation.isError && errorDetails && (
+          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm font-semibold text-red-800 flex items-center gap-1 mb-1">
+              <AlertCircle className="w-4 h-4" />
+              Failed to analyze repository
+            </p>
+            <p className="text-xs text-red-700 mb-2">
+              {errorDetails.message}
+            </p>
+            {errorDetails.status && (
+              <p className="text-xs text-red-600">
+                Status Code: {errorDetails.status}
+              </p>
+            )}
+            <div className="mt-2 pt-2 border-t border-red-200">
+              <p className="text-xs text-red-600 font-semibold mb-1">💡 Possible solutions:</p>
+              <ul className="text-xs text-red-700 space-y-1 list-disc list-inside">
+                {errorDetails.status === 404 && (
+                  <>
+                    <li>Check if repository URL is correct</li>
+                    <li>Make sure repository is public</li>
+                  </>
+                )}
+                {errorDetails.message?.includes('rate limit') && (
+                  <>
+                    <li>GitHub API rate limit exceeded</li>
+                    <li>Wait an hour or add GitHub token to backend</li>
+                  </>
+                )}
+                {errorDetails.message?.includes('Network Error') && (
+                  <>
+                    <li>Backend may not be running</li>
+                    <li>Check: http://localhost:8000/docs</li>
+                  </>
+                )}
+                {!errorDetails.status && (
+                  <>
+                    <li>Make sure backend is running on port 8000</li>
+                    <li>Check browser console for details</li>
+                  </>
+                )}
+              </ul>
+            </div>
+          </div>
         )}
+
         {analyzeRepoMutation.isSuccess && (
           <p className="mt-2 text-sm text-green-600 flex items-center gap-1">
             <CheckCircle2 className="w-4 h-4" />
@@ -98,45 +182,64 @@ export default function RepositorySelector({ onSelectRepository, selectedReposit
         ) : repositories && repositories.length > 0 ? (
           <div className="space-y-2">
             {repositories.map((repo) => (
-              <button
+              <div
                 key={repo.id}
-                onClick={() => onSelectRepository(repo)}
-                className={`w-full text-left px-4 py-3 rounded-lg border transition-all ${
+                className={`rounded-lg border-2 transition-all ${
                   selectedRepository?.id === repo.id
                     ? "border-primary-500 bg-primary-50"
-                    : "border-gray-200 hover:border-primary-300 hover:bg-gray-50"
+                    : "border-gray-200"
                 }`}
               >
-                <div className="flex items-start space-x-3">
-                  <Github
-                    className={`w-5 h-5 mt-0.5 flex-shrink-0 ${
-                      selectedRepository?.id === repo.id ? "text-primary-600" : "text-gray-400"
-                    }`}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className={`font-medium text-sm truncate ${
-                        selectedRepository?.id === repo.id ? "text-primary-900" : "text-gray-900"
-                      }`}
-                    >
-                      {repo.name}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate mt-0.5">{repo.url}</p>
-                    {repo.analyzed_at && (
-                      <p className="text-xs text-gray-400 mt-1">
-                        Analyzed: {new Date(repo.analyzed_at).toLocaleDateString()}
-                      </p>
-                    )}
+                <button
+                  onClick={() => onSelectRepository(repo)}
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50"
+                >
+                  <div className="flex items-start gap-3">
+                    <Github className="w-5 h-5 mt-0.5 text-gray-600" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{repo.full_name}</p>
+                      {repo.description && (
+                        <p className="text-sm text-gray-600 truncate mt-1">{repo.description}</p>
+                      )}
+                      <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                          {repo.language || "Unknown"}
+                        </span>
+                        <span>⭐ {repo.stars?.toLocaleString() || 0}</span>
+                      </div>
+                    </div>
                   </div>
+                </button>
+
+                {/* NEW: Graph Analyze Button */}
+                <div className="px-4 pb-3 border-t border-gray-200 pt-2">
+                  <button
+                    onClick={() => handleGraphAnalyze(repo.url)}
+                    disabled={analyzeGraphMutation.isPending}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {analyzeGraphMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Analyzing Graph...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Network className="w-4 h-4" />
+                        <span>Analyze Code Graph</span>
+                      </>
+                    )}
+                  </button>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-8">
-            <Github className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p className="text-sm text-gray-500">No repositories yet</p>
-            <p className="text-xs text-gray-400 mt-1">Add a repository above to get started</p>
+          <div className="text-center py-12">
+            <Github className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+            <p className="text-gray-500 text-sm mb-1">No repositories yet</p>
+            <p className="text-gray-400 text-xs">Add a repository above to get started</p>
           </div>
         )}
       </div>

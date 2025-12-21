@@ -12,7 +12,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["RAG Pipeline"])
+router = APIRouter(prefix="/rag", tags=["RAG Pipeline"])
 
 # No need to initialize - using singleton from rag_service.py
 

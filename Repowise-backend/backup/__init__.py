@@ -1,8 +1,3 @@
-"""
-Fixed app/services/__init__.py
-Adds enhanced commit indexing service instance
-"""
-
 # Services klasörü - İş mantığı burada olacak
 # Bu klasör şunları içerecek:
 # - rag_pipeline.py: RAG (Retrieval-Augmented Generation) pipeline
@@ -43,16 +38,6 @@ from .commit_indexing_service_enhanced import (
     EnhancedCommitIndexingService
 )
 
-# ============================================================================
-# CREATE ENHANCED SERVICE INSTANCE
-# ============================================================================
-
-# Create enhanced commit indexing service instance
-commit_indexing_service = create_enhanced_commit_indexing_service(
-    neo4j_service_enhanced,
-    github_service
-)
-
 # Export all
 __all__ = [
     # Core
@@ -73,8 +58,6 @@ __all__ = [
     "create_hybrid_rag_extension",
     "HybridRAGExtension",
     "create_commit_indexing_service",
-    "CommitIndexingService",
-    "create_enhanced_commit_indexing_service",
-    "EnhancedCommitIndexingService",
-    "commit_indexing_service",  # ← YENİ INSTANCE
+    "CommitIndexingService"
 ]
+

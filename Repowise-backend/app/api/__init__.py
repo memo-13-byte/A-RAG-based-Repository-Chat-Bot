@@ -1,6 +1,3 @@
-# file: app/api/__init__.py
-from . import chat, repository
+from . import chat, repository, graph  # ← GRAPH EKLE
 
-__all__ = ["chat", "repository"]
-
-
+__all__ = ["chat", "repository", "graph"]

@@ -1,6 +1,6 @@
 # ===================================================================
 # RepoWise Backend - Python Dependencies
-# Phase 2: RAG Pipeline with ChromaDB and CodeBERT
+# Phase 3: Knowledge Graph Integration with Neo4j
 # ===================================================================
 
 # ============== Phase 1: Core Dependencies (ACTIVE) ==============
@@ -34,7 +34,7 @@ tiktoken==0.5.2
 # HTTP Client
 aiohttp>=3.9.0
 
-# ============== Phase 2: RAG Pipeline (NEW!) ==============
+# ============== Phase 2: RAG Pipeline (ACTIVE) ==============
 
 # Vector Database
 chromadb==0.4.22
@@ -65,9 +65,28 @@ tree-sitter-javascript==0.21.0
 numpy>=1.24.0
 pandas>=2.0.0
 
-# ============== Phase 3: Knowledge Graph (Coming Soon) ==============
-# neo4j>=5.0.0
-# py2neo>=2021.2.3
+# ============== Phase 3: Knowledge Graph (ACTIVE!) ==============
+
+# Neo4j Database Driver
+neo4j==5.14.0
+
+# Code Analysis and AST Parsing
+tree-sitter==0.20.4
+tree-sitter-python==0.20.4
+tree-sitter-javascript==0.20.3
+tree-sitter-java==0.20.2
+tree-sitter-cpp==0.20.0
+tree-sitter-go==0.20.0
+
+# Additional Language Parsers (Optional - Uncomment if needed)
+# tree-sitter-typescript==0.20.3
+# tree-sitter-rust==0.20.4
+# tree-sitter-c-sharp==0.20.0
+# tree-sitter-ruby==0.20.0
+# tree-sitter-php==0.20.0
+
+# Graph Database Utilities (Optional - using neo4j driver primarily)
+# py2neo==2021.2.3
 
 # ============== Development and Testing (Optional) ==============
 # pytest>=7.4.0
@@ -79,19 +98,59 @@ pandas>=2.0.0
 # ===================================================================
 # Installation Commands:
 #
-# Full install (Phase 1 + 2):
-#   pip install -r requirements.txt
+# Full install (All Phases):
+#   pip install -r requirements.txt --break-system-packages
+#
+# Phase 1 only (Core API):
+#   pip install fastapi uvicorn PyGithub python-dotenv --break-system-packages
+#
+# Phase 2 only (RAG Pipeline):
+#   pip install chromadb==0.4.22 sentence-transformers==2.3.1 --break-system-packages
+#
+# Phase 3 only (Knowledge Graph):
+#   pip install neo4j==5.14.0 tree-sitter tree-sitter-python --break-system-packages
 #
 # ChromaDB only:
-#   pip install chromadb==0.4.22
+#   pip install chromadb==0.4.22 --break-system-packages
+#
+# Neo4j only:
+#   pip install neo4j==5.14.0 --break-system-packages
 #
 # CodeBERT embeddings:
-#   pip install sentence-transformers==2.3.1
+#   pip install sentence-transformers==2.3.1 --break-system-packages
 #
 # PyTorch CPU (faster install):
 #   pip install torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu
 #
-# Check installation:
-#   python -c "import chromadb; print(chromadb.__version__)"
-#   python -c "from sentence_transformers import SentenceTransformer; print('OK')"
+# Check installations:
+#   python -c "import chromadb; print(f'ChromaDB: {chromadb.__version__}')"
+#   python -c "from sentence_transformers import SentenceTransformer; print('Sentence Transformers: OK')"
+#   python -c "from neo4j import GraphDatabase; print('Neo4j Driver: OK')"
+#   python -c "import tree_sitter; print('Tree-sitter: OK')"
+# ===================================================================
+
+# ===================================================================
+# Phase Progress:
+#
+# ✅ Phase 1: Core API & GitHub Integration (COMPLETE)
+#    - FastAPI backend
+#    - GitHub/GitLab service
+#    - Repository analysis
+#    - 15 API endpoints
+#
+# ✅ Phase 2: RAG Pipeline (COMPLETE)
+#    - ChromaDB vector storage
+#    - Sentence-transformers embeddings
+#    - Document processing
+#    - Semantic search
+#    - 7 new RAG endpoints
+#
+# 🚀 Phase 3: Knowledge Graph (IN PROGRESS)
+#    - Neo4j graph database
+#    - Code entity extraction (tree-sitter)
+#    - Relationship mapping
+#    - Graph-based queries
+#
+# 📅 Phase 4: Multi-Agent System (PLANNED)
+# 📅 Phase 5: Evaluation & Publishing (PLANNED)
 # ===================================================================

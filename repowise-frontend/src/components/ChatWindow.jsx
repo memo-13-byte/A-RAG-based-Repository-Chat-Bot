@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { chatAPI, repositoryAPI, ragAPI, isRAGAvailable } from '../services/api';
 
 /**
- * Enhanced Chat Window Component - Phase 2
+ * Enhanced Chat Window Component - Phase 3
  *
  * New Features:
  * - RAG-powered responses for code questions
  * - Auto-indexing capability
  * - Index status display
  * - Semantic code search
+ * - Graph context integration (NEW!)
  */
 const EnhancedChatWindow = ({ selectedRepository }) => {
   const [messages, setMessages] = useState([]);
@@ -19,6 +20,7 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
   const [autoIndex, setAutoIndex] = useState(true);
   const [indexStatus, setIndexStatus] = useState(null);
   const [isIndexing, setIsIndexing] = useState(false);
+  const [useGraph, setUseGraph] = useState(true);  // Graph context toggle
 
   // Check RAG status when repository changes
   useEffect(() => {
@@ -31,7 +33,7 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
   const checkIndexStatus = async () => {
     if (!selectedRepository) return;
     try {
-        const status = await chatAPI.getIndexStatus(selectedRepository.url); // URL string
+        const status = await chatAPI.getIndexStatus(selectedRepository.url);
         setIndexStatus(status);
     } catch (error) {
         console.error('Error checking index status:', error);
@@ -44,7 +46,7 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
     if (!selectedRepository || isIndexing) return;
     setIsIndexing(true);
     try {
-      const result = await chatAPI.indexRepository(selectedRepository.url, true, 50); // URL string
+      const result = await chatAPI.indexRepository(selectedRepository.url, true, 50);
       console.log('Indexing result:', result);
       await checkIndexStatus();
       alert(`Successfully indexed! ${result.document_count || 0} chunks created.`);
@@ -55,7 +57,8 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
       setIsIndexing(false);
     }
   };
-  // Send message with Phase 2 features
+
+  // Send message with Phase 3 features
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
 
@@ -70,13 +73,14 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
     ]);
 
     try {
-      // Phase 2: Send with RAG options
+      // Phase 3: Send with graph context
       const response = await chatAPI.sendMessage(
         userMessage,
         selectedRepository.url,
         conversationId,
-        ragEnabled,      // Enable RAG
-        autoIndex        // Auto-index if needed
+        ragEnabled,
+        autoIndex,
+        useGraph  // Pass graph toggle state
       );
 
       // Save conversation ID
@@ -94,6 +98,8 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
           confidence: response.confidence || 0,
           rag_used: response.rag_used || false,
           indexed_chunks: response.indexed_chunks || null,
+          graph_used: response.graph_used || false,
+          graph_context: response.graph_context || null,
           timestamp: new Date().toISOString(),
         },
       ]);
@@ -117,13 +123,13 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
     }
   };
 
-  // Render message with Phase 2 metadata
+  // Render message with Phase 3 metadata (including graph context)
   const renderMessage = (message, index) => {
     if (message.role === 'user') {
       return (
         <div key={index} className="flex justify-end mb-4">
           <div className="bg-blue-500 text-white rounded-lg px-4 py-2 max-w-[70%]">
-            <p>{message.content}</p>
+            <p className="whitespace-pre-wrap">{message.content}</p>
           </div>
         </div>
       );
@@ -133,7 +139,21 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
       return (
         <div key={index} className="flex justify-start mb-4">
           <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 max-w-[70%]">
-            <p className="mb-2">{message.content}</p>
+            <p className="mb-2 whitespace-pre-wrap">{message.content}</p>
+
+            {/* Phase 3: Graph Context Display - NEW! */}
+            {message.graph_used && message.graph_context && (
+              <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold text-blue-800">
+                    🔗 Graph Enhanced
+                  </span>
+                </div>
+                <div className="text-xs text-blue-900 whitespace-pre-wrap">
+                  {message.graph_context}
+                </div>
+              </div>
+            )}
 
             {/* Phase 2: Show RAG metadata */}
             <div className="mt-2 pt-2 border-t border-gray-300 text-xs">
@@ -144,9 +164,16 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
                 </div>
               )}
 
+              {/* Graph Status - NEW! */}
+              {message.graph_used && (
+                <div className="mb-1 text-blue-600 font-semibold">
+                  📊 Graph Context Used
+                </div>
+              )}
+
               {/* Auto-indexed indicator */}
               {message.indexed_chunks > 0 && (
-                <div className="mb-1 text-blue-600">
+                <div className="mb-1 text-purple-600">
                   📚 Auto-indexed: {message.indexed_chunks} chunks
                 </div>
               )}
@@ -164,12 +191,22 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
                   <strong>Sources:</strong>
                   <ul className="list-disc list-inside">
                     {message.sources.map((source, idx) => (
-                      <li key={idx}>{source}</li>
+                      <li key={idx} className="text-gray-700">{source}</li>
                     ))}
                   </ul>
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (message.role === 'error') {
+      return (
+        <div key={index} className="flex justify-start mb-4">
+          <div className="bg-red-100 text-red-800 rounded-lg px-4 py-2 max-w-[70%] border border-red-300">
+            <p>{message.content}</p>
           </div>
         </div>
       );
@@ -214,25 +251,39 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
               </button>
             </div>
 
-            {/* RAG Toggle */}
-            <div className="flex items-center space-x-2 text-sm">
-              <label className="flex items-center cursor-pointer">
+            {/* Feature Toggles */}
+            <div className="flex items-center space-x-3 text-sm">
+              {/* RAG Toggle */}
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={ragEnabled}
                   onChange={(e) => setRagEnabled(e.target.checked)}
-                  className="mr-2"
+                  className="w-4 h-4 text-blue-600 rounded"
                 />
-                RAG Mode
+                <span className="text-gray-700">RAG Mode</span>
               </label>
-              <label className="flex items-center cursor-pointer">
+
+              {/* Graph Toggle - NEW! */}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useGraph}
+                  onChange={(e) => setUseGraph(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded"
+                />
+                <span className="text-gray-700">Graph Context</span>
+              </label>
+
+              {/* Auto-Index Toggle */}
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={autoIndex}
                   onChange={(e) => setAutoIndex(e.target.checked)}
-                  className="mr-2"
+                  className="w-4 h-4 text-blue-600 rounded"
                 />
-                Auto-Index
+                <span className="text-gray-700">Auto-Index</span>
               </label>
             </div>
           </div>
@@ -243,10 +294,15 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
       <div className="flex-1 overflow-y-auto p-4">
         {messages.length === 0 ? (
           <div className="text-center text-gray-500 mt-8">
-            <p>No messages yet. Start a conversation!</p>
+            <p className="text-lg mb-2">No messages yet. Start a conversation!</p>
             {ragEnabled && selectedRepository && (
               <p className="text-sm mt-2">
                 💡 RAG mode is enabled. Ask questions about code!
+              </p>
+            )}
+            {useGraph && selectedRepository && (
+              <p className="text-sm text-blue-600 mt-1">
+                📊 Graph context is enabled. Ask about class relationships!
               </p>
             )}
           </div>
@@ -289,10 +345,15 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
         </div>
 
         {/* Tips */}
-        {selectedRepository && ragEnabled && (
-          <p className="text-xs text-gray-500 mt-2">
-            💡 Tip: Ask "how to use this library" or "explain this function" for RAG-powered answers
-          </p>
+        {selectedRepository && (
+          <div className="text-xs text-gray-500 mt-2 space-y-1">
+            {ragEnabled && (
+              <p>💡 RAG Mode: Ask "how to use this library" or "explain this function"</p>
+            )}
+            {useGraph && (
+              <p>📊 Graph Mode: Ask "what classes inherit from X" or "show dependencies"</p>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -15,15 +15,16 @@ const api = axios.create({
 // CHAT API
 // ============================================================================
 export const chatAPI = {
-  // Send message (Phase 2: Enhanced with RAG support)
-  sendMessage: async (message, repositoryUrl = null, conversationId = null, useRAG = true, autoIndex = true) => {
+  // Send message (Phase 2: Enhanced with RAG support, Phase3: add useGraph parameter)
+  sendMessage: async (message, repositoryUrl = null, conversationId = null, useRAG = true, autoIndex = true, useGraph = true) => {
     const response = await api.post('/api/chat/send', {
       message,
       repository_url: repositoryUrl,
       conversation_id: conversationId,
       use_llm: true,
-      use_rag: useRAG,        // NEW: Enable RAG for code questions
-      auto_index: autoIndex,  // NEW: Auto-index if not indexed
+      use_rag: useRAG,
+      auto_index: autoIndex,
+      use_graph: useGraph,  // ← ADD THIS LINE
     });
     return response.data;
   },

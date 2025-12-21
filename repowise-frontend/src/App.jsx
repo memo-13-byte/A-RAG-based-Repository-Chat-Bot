@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ChatWindow from './components/ChatWindow';
 import RepositorySelector from './components/RepositorySelector';
+import GraphVisualization from './components/GraphVisualization';  // ← NEW IMPORT
 
 // React Query client
 const queryClient = new QueryClient({
@@ -15,6 +16,7 @@ const queryClient = new QueryClient({
 
 function App() {
   const [selectedRepository, setSelectedRepository] = useState(null);
+  const [activeTab, setActiveTab] = useState('chat');  // ← NEW STATE: 'chat' or 'graph'
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -29,7 +31,7 @@ function App() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">RepoWise</h1>
-                  <p className="text-sm text-gray-500">RAG-Based Repository Chatbot</p>
+                  <p className="text-sm text-gray-500">RAG-Based Repository Chatbot with Graph AI</p>
                 </div>
               </div>
               <div className="flex items-center space-x-2 text-sm text-gray-600">
@@ -42,9 +44,9 @@ function App() {
         </header>
 
         {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg-px-8 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-180px)]">
-            {/*Repository Selector - Left Sidebar */}
+            {/* Repository Selector - Left Sidebar */}
             <div className="lg:col-span-1">
               <RepositorySelector
                 onSelectRepository={setSelectedRepository}
@@ -52,9 +54,42 @@ function App() {
               />
             </div>
 
-            {/* Chat Window - Main Area */}
-            <div className="lg:col-span-2">
-              <ChatWindow selectedRepository={selectedRepository} />
+            {/* Main Area - Chat or Graph */}
+            <div className="lg:col-span-2 flex flex-col">
+              {/* Tab Navigation - NEW! */}
+              <div className="mb-4 bg-white rounded-lg shadow-sm">
+                <div className="flex border-b border-gray-200">
+                  <button
+                    onClick={() => setActiveTab('chat')}
+                    className={`flex-1 px-6 py-3 font-medium text-sm transition-colors ${
+                      activeTab === 'chat'
+                        ? 'border-b-2 border-blue-600 text-blue-600 bg-blue-50'
+                        : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                    }`}
+                  >
+                    💬 Chat
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('graph')}
+                    className={`flex-1 px-6 py-3 font-medium text-sm transition-colors ${
+                      activeTab === 'graph'
+                        ? 'border-b-2 border-blue-600 text-blue-600 bg-blue-50'
+                        : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                    }`}
+                  >
+                    📊 Code Graph
+                  </button>
+                </div>
+              </div>
+
+              {/* Content Area - Conditional Rendering */}
+              <div className="flex-1 bg-white rounded-lg shadow-sm overflow-hidden">
+                {activeTab === 'chat' ? (
+                  <ChatWindow selectedRepository={selectedRepository} />
+                ) : (
+                  <GraphVisualization selectedRepository={selectedRepository} />
+                )}
+              </div>
             </div>
           </div>
         </main>
@@ -65,8 +100,8 @@ function App() {
             BBM479 Graduation Project - Hacettepe University CS/AI
           </p>
         </footer>
-    </div>
-  </QueryClientProvider>
+      </div>
+    </QueryClientProvider>
   );
 }
 

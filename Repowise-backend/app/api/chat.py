@@ -17,7 +17,7 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/chat", tags=["chat"])
 
 # In-memory conversation storage
 conversations = {}
@@ -30,6 +30,7 @@ class ChatMessage(BaseModel):
     use_llm: bool = True
     use_rag: bool = True  # NEW: Enable RAG
     auto_index: bool = True  # NEW: Auto-index repository if not indexed
+    use_graph: bool = True  # NEW: Enable graph context
 
 
 class ChatResponse(BaseModel):
@@ -39,6 +40,8 @@ class ChatResponse(BaseModel):
     conversation_id: str
     rag_used: bool = False  # NEW: Indicates if RAG was used
     indexed_chunks: Optional[int] = None  # NEW: Number of chunks indexed
+    graph_used: bool = False  # NEW: Indicates if graph context was used
+    graph_context: Optional[str] = None  # NEW: Graph context if available
 
 
 def generate_conversation_id() -> str:
@@ -205,10 +208,14 @@ async def generate_rag_response(
         message: str,
         repository_url: str,
         repo_info: dict,
-        auto_index: bool = True
-) -> tuple[str, List[str], float, bool, int]:
+        auto_index: bool = True,
+        use_graph: bool = True  # ← ADD THIS PARAMETER
+) -> tuple[str, List[str], float, bool, int, bool, Optional[str]]:  # ← UPDATE RETURN TYPE (7 values)
     """
     Generate response using RAG (Retrieval-Augmented Generation)
+
+    Returns:
+        Tuple of (answer, sources, confidence, rag_used, indexed_chunks, graph_used, graph_context)
     """
     try:
         # --- DEĞİŞİKLİK: Doğru servisi seç ---
@@ -241,7 +248,7 @@ async def generate_rag_response(
                 logger.info(f"Indexed {indexed_chunks} chunks")
             else:
                 logger.warning(f"Indexing failed: {index_result.get('message')}")
-                return None, [], 0.0, False, 0
+                return None, [], 0.0, False, 0, False, None  # ← 7 VALUES
 
         # Query using RAG
         if status["indexed"] or indexed_chunks > 0:
@@ -251,7 +258,8 @@ async def generate_rag_response(
                 repo_name=full_repo_name,
                 question=message,
                 n_results=3,
-                use_llm=True
+                use_llm=True,
+                use_graph=use_graph  # ← FIXED: use parameter, not request
             )
 
             if rag_result.get("answer"):
@@ -265,14 +273,22 @@ async def generate_rag_response(
 
                 logger.info(f"RAG response generated (confidence: {confidence:.2f})")
 
-                return rag_result["answer"], sources, confidence, True, indexed_chunks
+                return (
+                    rag_result["answer"],
+                    sources,
+                    confidence,
+                    True,
+                    indexed_chunks,
+                    rag_result.get("graph_used", False),  # ← GRAPH FIELD
+                    rag_result.get("graph_context")  # ← GRAPH FIELD
+                )
 
         # RAG failed or not applicable
-        return None, [], 0.0, False, indexed_chunks
+        return None, [], 0.0, False, indexed_chunks, False, None  # ← 7 VALUES
 
     except Exception as e:
         logger.error(f"RAG error: {e}")
-        return None, [], 0.0, False, 0
+        return None, [], 0.0, False, 0, False, None  # ← 7 VALUES
 
 
 def generate_llm_response(
@@ -424,10 +440,14 @@ async def generate_smart_response(
         repository_url: Optional[str],
         use_llm: bool = True,
         use_rag: bool = True,
-        auto_index: bool = True
-) -> tuple[str, List[str], float, bool, int]:
+        auto_index: bool = True,
+        use_graph: bool = True  # ← ADD THIS PARAMETER
+) -> tuple[str, List[str], float, bool, int, bool, Optional[str]]:  # ← UPDATE RETURN TYPE (7 values)
     """
     Generate intelligent response using Git data, RAG, and LLM
+
+    Returns:
+        Tuple of (response, sources, confidence, rag_used, indexed_chunks, graph_used, graph_context)
     """
 
     # Return early if no repository selected
@@ -437,7 +457,9 @@ async def generate_smart_response(
             [],
             0.0,
             False,
-            0
+            0,
+            False,  # ← GRAPH FIELD
+            None  # ← GRAPH FIELD
         )
 
     try:
@@ -456,16 +478,18 @@ async def generate_smart_response(
         if use_rag and is_code_question(message_lower):
             logger.info("Detected code question, trying RAG...")
 
-            rag_response, rag_sources, rag_confidence, rag_success, chunks = await generate_rag_response(
+            # ← UNPACK 7 VALUES (not 5!)
+            rag_response, rag_sources, rag_confidence, rag_success, chunks, graph_used, graph_context = await generate_rag_response(
                 message=message,
                 repository_url=repository_url,
                 repo_info=repo_info,
-                auto_index=auto_index
+                auto_index=auto_index,
+                use_graph=use_graph  # ← PASS PARAMETER
             )
 
             if rag_success and rag_response:
                 logger.info("Using RAG response")
-                return rag_response, rag_sources, rag_confidence, True, chunks
+                return rag_response, rag_sources, rag_confidence, True, chunks, graph_used, graph_context  # ← 7 VALUES
             else:
                 logger.info("RAG failed, falling back to standard data")
 
@@ -491,7 +515,7 @@ async def generate_smart_response(
                     sources=sources
                 )
 
-                return response_text, sources, confidence, False, 0
+                return response_text, sources, confidence, False, 0, False, None  # ← 7 VALUES
 
             except Exception as e:
                 logger.error(f"LLM generation failed, falling back to rule-based: {e}")
@@ -505,7 +529,7 @@ async def generate_smart_response(
             sources=sources
         )
 
-        return response_text, sources, confidence, False, 0
+        return response_text, sources, confidence, False, 0, False, None  # ← 7 VALUES
 
     except Exception as e:
         logger.error(f"Error generating response: {e}")
@@ -517,7 +541,9 @@ async def generate_smart_response(
             ["Error log"],
             0.5,
             False,
-            0
+            0,
+            False,  # ← GRAPH FIELD
+            None  # ← GRAPH FIELD
         )
 
 
@@ -540,6 +566,7 @@ async def send_message(chat_message: ChatMessage):
     - **use_llm**: Whether to use LLM for generation (default: True)
     - **use_rag**: Whether to use RAG for code questions (default: True)
     - **auto_index**: Auto-index repository if needed (default: True)
+    - **use_graph**: Enable graph context for code structure (default: True)
 
     Returns:
     - **message**: Generated response text
@@ -548,6 +575,8 @@ async def send_message(chat_message: ChatMessage):
     - **conversation_id**: Conversation identifier
     - **rag_used**: Whether RAG was used
     - **indexed_chunks**: Number of chunks indexed (if applicable)
+    - **graph_used**: Whether graph context was used
+    - **graph_context**: Graph context data (if applicable)
     """
 
     # Create or use existing conversation ID
@@ -570,12 +599,14 @@ async def send_message(chat_message: ChatMessage):
     })
 
     # Generate intelligent response
-    response_message, sources, confidence, rag_used, indexed_chunks = await generate_smart_response(
+    # ← UNPACK 7 VALUES (not 5!)
+    response_message, sources, confidence, rag_used, indexed_chunks, graph_used, graph_context = await generate_smart_response(
         message=chat_message.message,
         repository_url=chat_message.repository_url,
         use_llm=chat_message.use_llm,
         use_rag=chat_message.use_rag,
-        auto_index=chat_message.auto_index
+        auto_index=chat_message.auto_index,
+        use_graph=chat_message.use_graph  # ← PASS PARAMETER
     )
 
     # Store assistant response in conversation history
@@ -585,6 +616,7 @@ async def send_message(chat_message: ChatMessage):
         "sources": sources,
         "confidence": confidence,
         "rag_used": rag_used,
+        "graph_used": graph_used,  # ← NEW FIELD
         "timestamp": datetime.now().isoformat(),
     })
 
@@ -594,7 +626,9 @@ async def send_message(chat_message: ChatMessage):
         confidence=confidence,
         conversation_id=conversation_id,
         rag_used=rag_used,
-        indexed_chunks=indexed_chunks if indexed_chunks > 0 else None
+        indexed_chunks=indexed_chunks if indexed_chunks > 0 else None,
+        graph_used=graph_used,  # ← NEW FIELD
+        graph_context=graph_context  # ← NEW FIELD
     )
 
 
@@ -694,7 +728,7 @@ async def get_index_status(repository_url: str):
         git_service = get_git_service(repository_url)
         owner, repo_name = git_service.parse_repo_url(repository_url)
         # ------------------
-        
+
         full_repo_name = f"{owner}/{repo_name}"
 
         status = rag_service.get_index_status(full_repo_name)
@@ -707,6 +741,7 @@ async def get_index_status(repository_url: str):
             status_code=500,
             detail=f"Error getting index status: {str(e)}"
         )
+
 
 @router.delete("/index")
 async def delete_index(repository_url: str):

@@ -1,11 +1,13 @@
 """
 GitHub Service - GitHub API Integration
 Handles all GitHub API interactions with comprehensive error handling and logging
-FIXED: Safe attribute access for compatibility with all repository types
+FIXED: Safe attribute access + RECURSIVE file tree fetching
 """
 
 import logging
 from typing import Dict, List, Optional, Tuple, Any
+
+import requests
 from github import Github, GithubException
 from github.Repository import Repository
 from github.ContentFile import ContentFile
@@ -22,7 +24,7 @@ class GitHubService:
     Provides methods for:
     - Repository information retrieval
     - Statistics and metrics
-    - File tree navigation
+    - File tree navigation (single level AND recursive)
     - Code search
     - Commit history
     """
@@ -82,6 +84,10 @@ class GitHubService:
         logger.debug(f"Parsed URL '{url}' -> owner='{owner}', repo='{repo_name}'")
         return owner, repo_name
 
+    def _parse_repo_url(self, repo_url: str) -> tuple:
+        """Wrapper for parse_github_url"""
+        return self.parse_repo_url(repo_url)
+
     def get_repository_info(self, repo_url: str) -> Dict[str, Any]:
         """
         Get comprehensive repository information from GitHub
@@ -128,7 +134,7 @@ class GitHubService:
                 "license": repo.license.name if safe_get(repo, 'license') and repo.license else None,
                 "private": safe_get(repo, 'private', False),
                 "archived": safe_get(repo, 'archived', False),
-                "disabled": safe_get(repo, 'disabled', False),  # ← SAFE!
+                "disabled": safe_get(repo, 'disabled', False),
                 "homepage": safe_get(repo, 'homepage', ''),
             }
 
@@ -334,17 +340,20 @@ class GitHubService:
 
     def get_file_tree(self, repo_url: str, path: str = "") -> List[Dict[str, Any]]:
         """
-        Get the file tree of a repository at a given path
+        Get the file tree of a repository at a given path (NON-RECURSIVE - single level only)
 
         Args:
             repo_url: GitHub repository URL
             path: Path within the repository (default: root "")
 
         Returns:
-            List of files and directories with metadata
+            List of files and directories with metadata (single level only)
 
         Raises:
             ValueError: If path is invalid
+
+        Note:
+            For recursive file fetching, use get_all_files_recursive()
         """
         try:
             owner, repo_name = self.parse_repo_url(repo_url)
@@ -395,6 +404,81 @@ class GitHubService:
         except Exception as e:
             logger.error(f"Error fetching file tree: {e}")
             raise ValueError(f"Failed to fetch file tree: {str(e)}")
+
+    def get_all_files_recursive(
+        self,
+        repo_url: str,
+        path: str = "",
+        file_extension: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Recursively get ALL files from repository (or filtered by extension)
+
+        Args:
+            repo_url: GitHub repository URL
+            path: Starting path (default: root "")
+            file_extension: Optional file extension filter (e.g., ".py", ".js")
+
+        Returns:
+            List of all files matching criteria (recursive through all subdirectories)
+
+        Example:
+            >>> get_all_files_recursive(url, file_extension=".py")
+            [{"name": "main.py", "path": "src/main.py", ...}, ...]
+
+        Note:
+            This recursively traverses ALL subdirectories!
+        """
+        try:
+            owner, repo_name = self.parse_repo_url(repo_url)
+            filter_msg = f" ({file_extension} only)" if file_extension else ""
+            logger.info(f"Recursively fetching files{filter_msg} for {owner}/{repo_name} from path: '{path}'")
+
+            repo = self.client.get_repo(f"{owner}/{repo_name}")
+            all_files = []
+
+            def fetch_recursive(current_path: str = ""):
+                """Recursively fetch all files from current path"""
+                try:
+                    contents = repo.get_contents(current_path)
+
+                    # Handle single file vs directory
+                    if not isinstance(contents, list):
+                        contents = [contents]
+
+                    for content in contents:
+                        if content.type == "file":
+                            # Check extension filter if provided
+                            if file_extension is None or content.name.endswith(file_extension):
+                                all_files.append({
+                                    "name": content.name,
+                                    "path": content.path,
+                                    "type": "file",
+                                    "size": content.size,
+                                    "sha": content.sha,
+                                    "url": content.html_url,
+                                    "download_url": content.download_url,
+                                })
+
+                        elif content.type == "dir":
+                            # Recursively fetch subdirectory
+                            fetch_recursive(content.path)
+
+                except GithubException as e:
+                    logger.warning(f"Error fetching path '{current_path}': {e}")
+                except Exception as e:
+                    logger.warning(f"Unexpected error at '{current_path}': {e}")
+
+            # Start recursive fetch
+            fetch_recursive(path)
+
+            logger.info(f"Found {len(all_files)} files recursively{filter_msg}")
+
+            return all_files
+
+        except Exception as e:
+            logger.error(f"Error in recursive file fetch: {e}")
+            return []
 
     def search_code(
         self,
@@ -509,6 +593,49 @@ class GitHubService:
                 "reset": None,
                 "used": 0,
             }
+
+    def get_commit_details(self, repo_url: str, commit_sha: str) -> Dict[str, Any]:
+        """Get detailed commit information including file changes"""
+        try:
+            owner, repo_name = self.parse_repo_url(repo_url)
+            logger.info(f"Fetching commit details: {commit_sha[:7]} from {owner}/{repo_name}")
+
+            repo = self.client.get_repo(f"{owner}/{repo_name}")
+            commit = repo.get_commit(commit_sha)
+
+            # Extract file changes
+            files = []
+            for file in commit.files:
+                files.append({
+                    'filename': file.filename,
+                    'status': file.status,
+                    'additions': file.additions,
+                    'deletions': file.deletions,
+                    'changes': file.changes,
+                    'patch': getattr(file, 'patch', None)
+                })
+
+            logger.info(f"Commit {commit_sha[:7]} has {len(files)} files")
+
+            return {
+                'sha': commit.sha,
+                'message': commit.commit.message,
+                'author': {
+                    'name': commit.commit.author.name,
+                    'email': commit.commit.author.email
+                },
+                'date': commit.commit.author.date.isoformat(),
+                'stats': {
+                    'additions': commit.stats.additions,
+                    'deletions': commit.stats.deletions,
+                    'total': commit.stats.total
+                },
+                'files': files
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting commit details: {e}")
+            return {'files': []}
 
 
 # Singleton instance
