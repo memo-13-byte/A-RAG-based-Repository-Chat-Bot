@@ -306,6 +306,101 @@ class LLMService:
         response = self.llm.invoke(messages, **kwargs)
         return response.content
 
+    async def generate_stream(
+            self,
+            prompt: str,
+            system_message: Optional[str] = None,
+            chat_history: Optional[List[Dict[str, str]]] = None,
+            **kwargs
+    ):
+        """
+        Generate response with streaming support
+
+        Yields:
+            str: Response chunks as they arrive
+        """
+        try:
+            # Build messages
+            messages = []
+
+            # System message
+            if system_message:
+                messages.append({
+                    "role": "system",
+                    "content": system_message
+                })
+            else:
+                messages.append({
+                    "role": "system",
+                    "content": "You are a helpful AI assistant specializing in code repositories."
+                })
+
+            # Chat history
+            if chat_history:
+                messages.extend(chat_history)
+
+            # User prompt
+            messages.append({
+                "role": "user",
+                "content": prompt
+            })
+
+            # Prepare parameters
+            params = {
+                "model": self.model,
+                "messages": messages,
+                "stream": True,  # ← STREAMING ENABLED!
+            }
+
+            # Add temperature
+            if "temperature" not in kwargs:
+                params["temperature"] = self.temperature
+            else:
+                params["temperature"] = kwargs["temperature"]
+
+            # Add max_tokens
+            if "max_tokens" not in kwargs:
+                params["max_tokens"] = self.max_tokens or 500
+            else:
+                params["max_tokens"] = kwargs["max_tokens"]
+
+            # Generate with streaming
+            if self.provider == LLMProvider.GROQ:
+                logger.info(f"Streaming with Groq ({self.model})")
+                response = self.llm.chat.completions.create(**params)
+
+                # Yield chunks
+                for chunk in response:
+                    if chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+
+            elif self.provider == LLMProvider.OPENAI:
+                logger.info(f"Streaming with OpenAI ({self.model})")
+                response = self.llm.chat.completions.create(**params)
+
+                for chunk in response:
+                    if chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+
+            else:
+                # Fallback: Simulate streaming
+                logger.info("Streaming with fallback (simulated)")
+                response = self._generate_fallback(prompt)
+
+                # Yield word by word
+                import asyncio
+                words = response.split()
+                for i, word in enumerate(words):
+                    if i == 0:
+                        yield word
+                    else:
+                        yield " " + word
+                    await asyncio.sleep(0.01)
+
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            raise
+
     def _generate_fallback(self, prompt: str) -> str:
         """
         Rule-based fallback response when no LLM available

@@ -612,7 +612,8 @@ class GitHubService:
                     'additions': file.additions,
                     'deletions': file.deletions,
                     'changes': file.changes,
-                    'patch': getattr(file, 'patch', None)
+                    'patch': getattr(file, 'patch', None),
+                    'previous_filename': getattr(file, 'previous_filename', None)  # ← FİX!
                 })
 
             logger.info(f"Commit {commit_sha[:7]} has {len(files)} files")

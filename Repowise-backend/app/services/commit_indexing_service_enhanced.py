@@ -45,6 +45,7 @@ class EnhancedCommitIndexingService:
         """
         self.neo4j = neo4j_service
         self.git = git_service
+        self._commit_cache = {}
         
         logger.info("Enhanced Commit Indexing Service initialized")
 
@@ -86,6 +87,293 @@ class EnhancedCommitIndexingService:
         
         return 'other'
 
+    def detect_file_renames(self, repo_url: str, commit_sha: str) -> List[Dict]:
+        """
+        Detect file renames using heuristic matching
+
+        Git'in %50 similarity threshold'u yüzünden GitHub API'de
+        'renamed' status'u gelmeyebilir. Bu durumda:
+        - 'removed' (silinen) dosyalar
+        - 'added' (eklenen) dosyalar
+        arasında eşleştirme yaparak rename'leri buluruz.
+
+        Heuristic Matching Kriterleri:
+        1. Exact filename match (farklı path)
+        2. Similar filename (typo fix, extension change)
+        3. Same directory + similar name
+        """
+        try:
+            # Use cached commit details
+            cache_key = f"{repo_url}:{commit_sha}"
+
+            if cache_key in self._commit_cache:
+                commit_details = self._commit_cache[cache_key]
+            else:
+                if not hasattr(self.git, 'get_commit_details'):
+                    logger.warning("git_service doesn't have get_commit_details method")
+                    return []
+
+                commit_details = self.git.get_commit_details(repo_url, commit_sha)
+
+                if commit_details:
+                    self._commit_cache[cache_key] = commit_details
+
+            if not commit_details:
+                return []
+
+            files = commit_details.get('files', [])
+
+            # File status'larını logla
+            file_statuses = {}
+            for f in files:
+                status = f.get('status', 'unknown')
+                file_statuses[status] = file_statuses.get(status, 0) + 1
+
+            if file_statuses:
+                logger.info(f"📊 Commit {commit_sha[:7]} file statuses: {file_statuses}")
+
+            if not files:
+                return []
+
+            # Separate files by status
+            removed_files = []
+            added_files = []
+            renamed_files = []
+
+            for file_data in files:
+                status = file_data.get('status', '')
+
+                # GitHub API'den gelen rename'leri direkt kabul et
+                if status == 'renamed':
+                    renamed_files.append({
+                        'old_path': file_data.get('previous_filename', ''),
+                        'new_path': file_data.get('filename', ''),
+                        'similarity': 100,
+                        'method': 'api'  # API'den geldi
+                    })
+
+                elif status == 'removed':
+                    removed_files.append({
+                        'path': file_data.get('filename', ''),
+                        'data': file_data
+                    })
+
+                elif status == 'added':
+                    added_files.append({
+                        'path': file_data.get('filename', ''),
+                        'data': file_data
+                    })
+
+            # Heuristic matching: removed + added → rename
+            if removed_files and added_files:
+                heuristic_renames = self._match_renames_heuristic(
+                    removed_files,
+                    added_files,
+                    commit_sha
+                )
+                renamed_files.extend(heuristic_renames)
+
+            # Log results
+            if renamed_files:
+                api_count = sum(1 for r in renamed_files if r.get('method') == 'api')
+                heuristic_count = sum(1 for r in renamed_files if r.get('method') == 'heuristic')
+
+                logger.info(
+                    f"✅ Found {len(renamed_files)} file renames in commit {commit_sha[:7]} "
+                    f"(API: {api_count}, Heuristic: {heuristic_count})"
+                )
+
+            return renamed_files
+
+        except Exception as e:
+            logger.error(f"Error detecting renames in commit {commit_sha[:7]}: {e}")
+            return []
+
+    def _match_renames_heuristic(
+            self,
+            removed_files: List[Dict],
+            added_files: List[Dict],
+            commit_sha: str
+    ) -> List[Dict]:
+        """
+        Match removed and added files to detect renames
+
+        Matching Strategies (in order):
+        1. Exact filename, different directory
+        2. Same directory, similar filename
+        3. Extension change only
+        4. Typo fix (Levenshtein distance)
+        """
+        import os
+
+        renames = []
+        matched_added = set()  # Track which added files we've matched
+
+        for removed in removed_files:
+            old_path = removed['path']
+            old_dir = os.path.dirname(old_path)
+            old_name = os.path.basename(old_path)
+            old_base, old_ext = os.path.splitext(old_name)
+
+            best_match = None
+            best_score = 0
+
+            for i, added in enumerate(added_files):
+                if i in matched_added:
+                    continue  # Already matched
+
+                new_path = added['path']
+                new_dir = os.path.dirname(new_path)
+                new_name = os.path.basename(new_path)
+                new_base, new_ext = os.path.splitext(new_name)
+
+                score = 0
+
+                # Strategy 1: Exact filename, different directory
+                # Example: src/utils.py → lib/utils.py
+                if old_name == new_name and old_dir != new_dir:
+                    score = 90
+
+                # Strategy 2: Same directory, similar filename
+                # Example: src/old_name.py → src/new_name.py
+                elif old_dir == new_dir and old_ext == new_ext:
+                    similarity = self._string_similarity(old_base, new_base)
+                    if similarity > 0.6:  # 60% benzerlik
+                        score = 70 + (similarity * 20)  # 70-90 arası
+
+                # Strategy 3: Extension change only
+                # Example: utils.js → utils.ts
+                elif old_base == new_base and old_ext != new_ext:
+                    score = 85
+
+                # Strategy 4: Path similarity (full path)
+                # Example: src/components/Button.jsx → src/components/ButtonNew.jsx
+                else:
+                    path_similarity = self._string_similarity(old_path, new_path)
+                    if path_similarity > 0.7:  # 70% benzerlik
+                        score = 60 + (path_similarity * 30)  # 60-90 arası
+
+                # Update best match
+                if score > best_score and score >= 60:  # Min 60 puan
+                    best_score = score
+                    best_match = (i, new_path)
+
+            # If we found a good match, record it
+            if best_match:
+                matched_index, new_path = best_match
+                matched_added.add(matched_index)
+
+                renames.append({
+                    'old_path': old_path,
+                    'new_path': new_path,
+                    'similarity': int(best_score),
+                    'method': 'heuristic'  # Heuristic ile bulundu
+                })
+
+                logger.debug(
+                    f"🔍 Heuristic rename detected in {commit_sha[:7]}: "
+                    f"{old_path} → {new_path} (score: {best_score})"
+                )
+
+        return renames
+
+    def _string_similarity(self, s1: str, s2: str) -> float:
+        """
+        Calculate string similarity using simple algorithm
+
+        Returns: 0.0 to 1.0 (0 = completely different, 1 = identical)
+        """
+        if s1 == s2:
+            return 1.0
+
+        if not s1 or not s2:
+            return 0.0
+
+        # Levenshtein-like simple algorithm
+        # (basit versiyonu - production'da difflib kullanılabilir)
+
+        # Convert to lowercase for comparison
+        s1_lower = s1.lower()
+        s2_lower = s2.lower()
+
+        if s1_lower == s2_lower:
+            return 0.95  # Case farklı ama aynı
+
+        # Longest common substring ratio
+        longer = max(len(s1), len(s2))
+
+        # Count common characters
+        common = 0
+        for c in set(s1):
+            common += min(s1.count(c), s2.count(c))
+
+        return common / longer
+
+    def index_rename_to_neo4j(
+            self,
+            repo_name: str,
+            commit_sha: str,
+            old_path: str,
+            new_path: str,
+            commit_date: str
+    ):
+        """
+        Create file rename relationship in Neo4j
+
+        Creates:
+            (OldFile)-[:RENAMED_TO {commit_sha, date}]->(NewFile)
+            (Commit)-[:RENAMED_FILE]->(NewFile)
+
+        Args:
+            repo_name: Full repository name (owner/repo)
+            commit_sha: Commit that performed the rename
+            old_path: Original file path
+            new_path: New file path
+            commit_date: ISO timestamp of commit
+        """
+        query = """
+        // Get the commit
+        MATCH (c:Commit {sha: $commit_sha})
+        WHERE c.repo = $repo_name OR c.repository = $repo_name
+
+        // Create or get file nodes
+        MERGE (old:File {path: $old_path, repo: $repo_name})
+        MERGE (new:File {path: $new_path, repo: $repo_name})
+
+        // Create rename relationship
+        MERGE (old)-[:RENAMED_TO {
+            commit_sha: $commit_sha,
+            date: datetime($commit_date),
+            repo: $repo_name
+        }]->(new)
+
+        // Link commit to renamed file
+        MERGE (c)-[:RENAMED_FILE]->(new)
+
+        RETURN old.path as old_path, new.path as new_path
+        """
+
+        try:
+            with self.neo4j._driver.session() as session:
+                result = session.run(
+                    query,
+                    repo_name=repo_name,
+                    commit_sha=commit_sha,
+                    old_path=old_path,
+                    new_path=new_path,
+                    commit_date=commit_date
+                )
+
+                record = result.single()
+                if record:
+                    logger.info(f"✅ Indexed rename: {old_path} → {new_path}")
+                    return True
+
+        except Exception as e:
+            logger.error(f"Error indexing rename to Neo4j: {e}")
+
+        return False
+
     # ========================================================================
     # NEW: Enhanced Indexing with File Tracking
     # ========================================================================
@@ -122,6 +410,7 @@ class EnhancedCommitIndexingService:
                 'modifications_tracked': 0, # NEW
                 'total_additions': 0,       # NEW
                 'total_deletions': 0,       # NEW
+                'renames_detected': 0,
                 'errors': 0
             }
             
@@ -181,16 +470,40 @@ class EnhancedCommitIndexingService:
                                 stats['modifications_tracked'] += file_stats.get('modifications', 0)
                                 stats['total_additions'] += file_stats.get('additions', 0)
                                 stats['total_deletions'] += file_stats.get('deletions', 0)
-                            
+
+                            # NEW: Detect and index file renames
+                            if include_files:  # Only if file tracking is enabled
+                                try:
+                                    renames = self.detect_file_renames(repo_url, sha)
+
+                                    for rename in renames:
+                                        success = self.index_rename_to_neo4j(
+                                            repo_name=repo_name,
+                                            commit_sha=sha,
+                                            old_path=rename['old_path'],
+                                            new_path=rename['new_path'],
+                                            commit_date=analyzed.get('date', '')
+                                        )
+
+                                        if success:
+                                            stats['renames_detected'] += 1
+
+                                except Exception as e:
+                                    logger.error(f"Error processing renames for {sha[:7]}: {e}")
+
                             if i % 10 == 0:
                                 logger.info(f"Progress: {i}/{len(commits)} commits")
                             
                             logger.debug(f"Indexed commit: {sha[:7]}")
+
+
                     
                     except Exception as e:
                         logger.error(f"Error processing commit {commit_data.get('sha', 'unknown')}: {e}")
                         stats['errors'] += 1
                         continue
+
+
                 
             finally:
                 self.neo4j.close()
@@ -253,6 +566,14 @@ class EnhancedCommitIndexingService:
             commit_details = self.git.get_commit_details(repo_url, commit_sha)
             
             files = commit_details.get('files', [])
+
+            # Cache'e kaydet
+            cache_key = f"{repo_url}:{commit_sha}"
+            if cache_key not in self._commit_cache:
+                commit_details = self.git.get_commit_details(repo_url, commit_sha)
+                self._commit_cache[cache_key] = commit_details
+            else:
+                commit_details = self._commit_cache[cache_key]
             
             if not files:
                 logger.debug(f"No files found in commit {commit_sha[:7]}")

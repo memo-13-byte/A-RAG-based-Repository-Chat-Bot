@@ -15,7 +15,7 @@ const api = axios.create({
 // CHAT API
 // ============================================================================
 export const chatAPI = {
-  // Send message (Phase 2: Enhanced with RAG support, Phase3: add useGraph parameter)
+  // Send message
   sendMessage: async (message, repositoryUrl = null, conversationId = null, useRAG = true, autoIndex = true, useGraph = true) => {
     const response = await api.post('/api/chat/send', {
       message,
@@ -24,7 +24,7 @@ export const chatAPI = {
       use_llm: true,
       use_rag: useRAG,
       auto_index: autoIndex,
-      use_graph: useGraph,  // ← ADD THIS LINE
+      use_graph: useGraph,
     });
     return response.data;
   },
@@ -41,7 +41,7 @@ export const chatAPI = {
     return response.data;
   },
 
-  // NEW: Index repository for RAG
+  // Index repository for RAG
   indexRepository: async (repositoryUrl, includeCode = true, maxFiles = 50) => {
     const response = await api.post('/api/chat/index', null, {
       params: {
@@ -53,7 +53,7 @@ export const chatAPI = {
     return response.data;
   },
 
-  // NEW: Check index status
+  // Check index status
   getIndexStatus: async (repositoryUrl) => {
     const response = await api.get('/api/chat/index-status', {
       params: { repository_url: repositoryUrl },
@@ -61,7 +61,7 @@ export const chatAPI = {
     return response.data;
   },
 
-  // NEW: Delete index
+  // Delete index
   deleteIndex: async (repositoryUrl) => {
     const response = await api.delete('/api/chat/index', {
       params: { repository_url: repositoryUrl },
@@ -100,21 +100,13 @@ export const repositoryAPI = {
     return response.data;
   },
 
-  // NEW: Repository file tree (Phase 2 format - recommended)
+  // Repository file tree
   getRepositoryFiles: async (repoName, path = '') => {
     const response = await api.get('/api/repository/files', {
       params: {
         repo_name: repoName,
         path: path,
       },
-    });
-    return response.data;
-  },
-
-  // LEGACY: Phase 1 format (still works but deprecated)
-  getRepositoryFilesLegacy: async (repoName, path = '') => {
-    const response = await api.get(`/api/repository/${repoName}/files`, {
-      params: { path },
     });
     return response.data;
   },
@@ -127,7 +119,7 @@ export const repositoryAPI = {
 };
 
 // ============================================================================
-// RAG API (Phase 2 - NEW!)
+// RAG API
 // ============================================================================
 export const ragAPI = {
   // Index repository for RAG
@@ -182,6 +174,53 @@ export const ragAPI = {
   // RAG health check
   healthCheck: async () => {
     const response = await api.get('/api/rag/health');
+    return response.data;
+  },
+};
+
+// ============================================================================
+// AUTOFIX API (AutoCodeRover Integration) - NEW!
+// ============================================================================
+export const autofixAPI = {
+  /**
+   * Check if AutoFix service is healthy
+   */
+  checkHealth: async () => {
+    const response = await api.get('/api/v1/autofix/health');
+    return response.data;
+  },
+
+  /**
+   * Submit an automated fix request
+   */
+  submitFix: async ({ repoUrl, issueDescription, model = 'gpt-4o-mini-2024-07-18', temperature = 0.2 }) => {
+    const response = await api.post('/api/v1/autofix/submit', {
+      repo_url: repoUrl,
+      issue_description: issueDescription,
+      model,
+      temperature,
+    });
+    return response.data;
+  },
+
+  /**
+   * Get status of a fix request
+   */
+  getStatus: async (taskId) => {
+    const response = await api.get(`/api/v1/autofix/status/${taskId}`);
+    return response.data;
+  },
+
+  /**
+   * Submit and wait for completion (synchronous)
+   */
+  submitAndWait: async ({ repoUrl, issueDescription, model = 'gpt-4o-mini-2024-07-18', temperature = 0.2, maxWait = 600 }) => {
+    const response = await api.post(`/api/v1/autofix/submit-and-wait?max_wait=${maxWait}`, {
+      repo_url: repoUrl,
+      issue_description: issueDescription,
+      model,
+      temperature,
+    });
     return response.data;
   },
 };

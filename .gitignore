@@ -1,21 +1,77 @@
-# Logs
-logs
-*.log
+# ============================================
+# PYTHON
+# ============================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# ============================================
+# NODE / FRONTEND
+# ============================================
+node_modules/
+dist/
+dist-ssr/
+*.local
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# ============================================
+# ENVIRONMENT & SECRETS
+# ============================================
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
 
-# Editor directories and files
+# ============================================
+# DATABASES & DATA
+# ============================================
+# ChromaDB data files
+chroma_db/
+*.sqlite3
+*.db
+
+# Neo4j data (if running locally)
+neo4j_data/
+
+# ============================================
+# DOCKER
+# ============================================
+# Docker volumes and data
+docker-data/
+*.tar
+*.tar.gz
+
+# DO NOT ignore docker-compose.yml - we need this!
+# DO NOT ignore Dockerfile - we need this!
+
+# ============================================
+# IDE & EDITORS
+# ============================================
+# VSCode
 .vscode/*
 !.vscode/extensions.json
-.idea
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+out/
+
+# Other editors
 .DS_Store
 *.suo
 *.ntvs*
@@ -23,11 +79,30 @@ dist-ssr
 *.sln
 *.sw?
 
-# IntelliJ IDEA / JetBrains IDEs
-*.iml
-*.iws
-out/
-.idea/
+# ============================================
+# LOGS & TEMP FILES
+# ============================================
+logs/
+*.log
 
-# Python virtual environments
-.venv/
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# ============================================
+# BUILD ARTIFACTS
+# ============================================
+build/
+coverage/
+.pytest_cache/
+
+# ============================================
+# AUTOFIX SPECIFIC
+# ============================================
+# AutoCodeRover patches output
+patches/
+*.patch
+
+# AutoCodeRover temp files
+autocoderover_temp/

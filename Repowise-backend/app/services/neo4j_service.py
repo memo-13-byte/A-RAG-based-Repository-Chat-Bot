@@ -722,6 +722,111 @@ class Neo4jService:
             logger.error(f"Error getting call graph: {e}")
             return {}
 
+    def get_commit_frequency_timeline(self, repo_name: str, granularity: str = 'month'):
+        """Get commit frequency over time"""
+        if granularity == 'week':
+            query = """
+            MATCH (r:Repository {name: $repo_name})-[:CONTAINS]->(c:Commit)
+            WITH date(c.date).year as year, 
+                 date(c.date).week as week,
+                 count(c) as commits
+            RETURN year, week, commits
+            ORDER BY year, week
+            """
+        else:  # month
+            query = """
+            MATCH (r:Repository {name: $repo_name})-[:CONTAINS]->(c:Commit)
+            WITH date(c.date).year as year, 
+                 date(c.date).month as month,
+                 count(c) as commits
+            RETURN year, month, commits
+            ORDER BY year, month
+            """
+        return self.execute_query(query, {"repo_name": repo_name})
+
+    def get_commits_by_folder(self, repo_name: str):
+        """Get commit breakdown by folder/module"""
+        query = """
+        MATCH (r:Repository {name: $repo_name})-[:CONTAINS]->(c:Commit)
+              -[:MODIFIES]->(f:File)
+        WITH split(f.path, '/')[0] as folder, count(DISTINCT c) as commits
+        RETURN folder, commits
+        ORDER BY commits DESC
+        LIMIT 20
+        """
+        return self.execute_query(query, {"repo_name": repo_name})
+
+    def get_largest_commits(self, repo_name: str, limit: int = 10):
+        """Get commits with most lines changed"""
+        query = """
+        MATCH (r:Repository {name: $repo_name})-[:CONTAINS]->(c:Commit)
+        WHERE c.additions IS NOT NULL AND c.deletions IS NOT NULL
+        WITH c, (c.additions + c.deletions) as total_changes
+        RETURN c, total_changes
+        ORDER BY total_changes DESC
+        LIMIT $limit
+        """
+        return self.execute_query(query, {"repo_name": repo_name, "limit": limit})
+
+    def get_module_from_path(self, file_path: str) -> str:
+        """Extract module name from file path"""
+        parts = file_path.split('/')
+        if len(parts) > 1:
+            return parts[0]  # Top-level directory
+        return "root"
+
+    def get_modules(self, repo_name: str):
+        """Get all modules in repository"""
+        query = """
+        MATCH (r:Repository {name: $repo_name})-[:CONTAINS]->(f:File)
+        WITH split(f.path, '/')[0] as module, count(f) as file_count
+        RETURN module, file_count
+        ORDER BY file_count DESC
+        """
+        return self.execute_query(query, {"repo_name": repo_name})
+
+    def get_commits_by_module(self, repo_name: str, module: str):
+        """Get commits that modified a specific module"""
+        query = """
+        MATCH (r:Repository {name: $repo_name})-[:CONTAINS]->(c:Commit)
+              -[:MODIFIES]->(f:File)
+        WHERE f.path STARTS WITH $module + '/'
+        RETURN DISTINCT c
+        ORDER BY c.date DESC
+        """
+        return self.execute_query(query, {
+            "repo_name": repo_name,
+            "module": module
+        })
+
+    def get_developers_by_module(self, repo_name: str, module: str):
+        """Get developers who worked on a module"""
+        query = """
+        MATCH (r:Repository {name: $repo_name})-[:CONTAINS]->(c:Commit)
+              -[:MODIFIES]->(f:File),
+              (d:Developer)-[:AUTHORED]->(c)
+        WHERE f.path STARTS WITH $module + '/'
+        RETURN DISTINCT d, count(c) as commits
+        ORDER BY commits DESC
+        """
+        return self.execute_query(query, {
+            "repo_name": repo_name,
+            "module": module
+        })
+
+    def get_module_evolution(self, repo_name: str, module: str):
+        """Get evolution timeline of a module"""
+        query = """
+        MATCH (r:Repository {name: $repo_name})-[:CONTAINS]->(c:Commit)
+              -[:MODIFIES]->(f:File)
+        WHERE f.path STARTS WITH $module + '/'
+        RETURN c, collect(f.path) as files_modified
+        ORDER BY c.date ASC
+        """
+        return self.execute_query(query, {
+            "repo_name": repo_name,
+            "module": module
+        })
 
 # Singleton instance
 neo4j_service = Neo4jService(

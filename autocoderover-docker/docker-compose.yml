@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  autocoderover:
+    image: repowise/autocoderover:latest
+    container_name: acr-service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    environment:
+      # OpenAI API Keys (both variants for compatibility)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_KEY=${OPENAI_API_KEY}
+      
+      # Alternative LLM providers (optional)
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      
+      # Python settings
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/opt/auto-code-rover
+      
+      # Conda environment
+      - CONDA_DEFAULT_ENV=auto-code-rover
+    
+    volumes:
+      # Persistent storage for repos and outputs
+      - ./repos:/repos
+      - ./outputs:/outputs
+      
+      # Temporary workdir (optional: uncomment for persistence)
+      # - ./workdir:/tmp/workdir
+      
+      # Development: Mount wrapper_api.py for live editing
+      # Uncomment for development, comment for production
+      - ./wrapper_api.py:/opt/auto-code-rover/wrapper_api.py
+    
+    ports:
+      - "8001:8001"
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    networks:
+      - repowise-net
+    
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  repowise-net:
+    driver: bridge
+    name: repowise-network
+
+volumes:
+  repos:
+    driver: local
+  outputs:
+    driver: local

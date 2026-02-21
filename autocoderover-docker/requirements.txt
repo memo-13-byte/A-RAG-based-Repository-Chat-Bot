@@ -1,0 +1,39 @@
+# AutoCodeRover Docker - Complete Requirements
+# Verified through actual runtime testing
+# Date: 2026-01-03
+
+# === Wrapper API Dependencies ===
+fastapi==0.110.0
+uvicorn[standard]==0.27.0
+pydantic==2.6.0
+
+# === AutoCodeRover Core Dependencies ===
+# These are NOT in environment.yml but required at runtime
+# Discovered through systematic testing
+
+# Logging and Output
+loguru               # Logging framework
+emojis               # Emoji support in output
+
+# Utilities and Helpers
+natsort              # Natural sorting
+tenacity             # Retry logic
+timeout_decorator    # Timeout decorators
+unidiff              # Unified diff parsing
+
+# Code Analysis and Linting
+pylint               # Python linter (includes: astroid, dill, isort, mccabe, platformdirs, tomlkit)
+coverage             # Code coverage analysis
+
+# LLM Provider Support
+ollama               # Ollama LLM provider
+
+# === Notes ===
+# 1. Main dependencies come from environment.yml (created by conda)
+# 2. This file contains ONLY additional packages missing from environment.yml
+# 3. All packages tested and verified on 2026-01-03
+# 4. Installation order doesn't matter for these packages
+
+# === Installation ===
+# Inside conda environment:
+# pip install --no-cache-dir -r requirements-autocoderover.txt
