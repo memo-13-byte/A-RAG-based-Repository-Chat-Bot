@@ -1,4 +1,4 @@
-# 🚀 RepoWise - Knowledge Graph Repository Analysis System
+# 🚀 RepoWise - AI-Powered Repository Analysis with AutoFix
 
 > **An AI-powered repository analysis system combining RAG, Knowledge Graphs, and LLMs for intelligent code insights.**
 
@@ -11,6 +11,8 @@ A comprehensive platform that integrates vector search (ChromaDB), knowledge gra
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python)](https://www.python.org/)
 [![Neo4j](https://img.shields.io/badge/Neo4j-2025.10-008CC1?style=flat&logo=neo4j)](https://neo4j.com/)
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-0.4.22-FF6B6B?style=flat)](https://www.trychroma.com/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker)](https://www.docker.com/)
+[![AutoCodeRover](https://img.shields.io/badge/AutoFix-Integrated-FF6F00?style=flat&logo=robot)](https://github.com/nus-apr/auto-code-rover)
 
 ---
 
@@ -57,7 +59,31 @@ A comprehensive platform that integrates vector search (ChromaDB), knowledge gra
 - 🔗 **Hybrid RAG**: Vector + Graph search with intent-based routing (~80% accuracy)
 - 📈 **Analytics API**: 7 endpoints for repository insights
 
-### 🔜 Phase 4 & 5 (Upcoming)
+### ✅ Phase 4 - Multi-Agent Systems & AutoFix (COMPLETE) 🆕
+
+**AutoFix - Automated Code Fixing:**
+- 🤖 AutoCodeRover integration with custom Docker build (12.8GB)
+- 🎨 Frontend component with 640+ lines of React code
+- ⚡ 4 API endpoints: health, submit, status, sync-wait
+- 🎯 Natural language issue descriptions → AI-generated patches
+- 🔄 Real-time status polling with progress indicators
+- 🎛️ Model selection: GPT-4o, GPT-4o-mini, GPT-4 Turbo
+- 🌡️ Temperature control (0.0-1.0)
+- 📥 Patch preview with syntax highlighting
+
+**Docker Infrastructure:**
+- 📦 docker-compose.yml with 3 services
+- 🔧 AutoCodeRover service (Miniconda3-based)
+- 🗄️ Neo4j 5.13.0 with APOC plugins
+- 🔢 ChromaDB with persistent storage
+- 💾 Resource management (4 CPU, 8GB RAM)
+
+**Documentation:**
+- 📄 End of Term Development Report (15,000+ LOC documented)
+- 📊 14-slide professional presentation
+- 📖 AutoFix setup guides and API documentation
+
+### 📅 Phase 5 - Evaluation & Production (PLANNED)
 
 - Multi-Agent System (AutoCodeRover, CodexGraph)
 - Advanced Code Analysis
@@ -144,6 +170,77 @@ A comprehensive platform that integrates vector search (ChromaDB), knowledge gra
 ---
 
 ## 🚀 Installation
+
+
+### Method 1: Docker Compose (Recommended for Production)
+
+This method automatically sets up AutoCodeRover, Neo4j, and ChromaDB.
+
+#### Step 1: Clone and Setup Environment
+
+```bash
+# Clone repository
+git clone https://github.com/memo-13-byte/RepoWise.git
+cd RepoWise
+
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your API keys
+# Required: OPENAI_API_KEY, GITHUB_TOKEN, GITLAB_TOKEN
+```
+
+#### Step 2: Pull Docker Images
+
+```bash
+# Pull AutoCodeRover image (12.8 GB - may take 10-30 min)
+docker pull ghcr.io/nus-apr/auto-code-rover:v0.1.0
+
+# Verify image
+docker images | grep auto-code-rover
+```
+
+#### Step 3: Start All Services
+
+```bash
+# Start AutoCodeRover, Neo4j, ChromaDB
+docker-compose up -d
+
+# Check status
+docker-compose ps
+
+# Expected output:
+# repowise-autocoderover  Up (healthy)
+# repowise-neo4j          Up
+# repowise-chromadb       Up
+```
+
+#### Step 4: Start Backend
+
+```bash
+cd Repowise-backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1  # Windows
+# source .venv/bin/activate    # Linux/Mac
+
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8080
+```
+
+#### Step 5: Start Frontend
+
+```bash
+cd repowise-frontend
+npm install
+npm run dev
+```
+
+Access: http://localhost:5173
+
+### Method 2: Manual Setup (Development)
+
+Follow the existing installation steps for manual setup without Docker Compose.
+
 
 ### 1. Backend Setup
 
@@ -425,6 +522,128 @@ POST /api/repository/index
 "Explain the authentication mechanism"
 ```
 
+
+#### AutoFix Endpoints (4 endpoints) 🆕
+
+Base path: `/api/v1/autofix`
+
+| Method | Endpoint | Description | Request | Response |
+|--------|----------|-------------|---------|----------|
+| GET | `/health` | Check service health | - | `{status: "healthy"}` |
+| POST | `/submit` | Submit fixing task | `{repo_url, issue_description, model, temperature}` | `{task_id, status}` |
+| GET | `/status/{task_id}` | Check task status | - | `{status, progress, patch_url}` |
+| GET | `/sync-wait/{task_id}` | Wait for completion | - | `{status, patch}` |
+
+**Example - Submit AutoFix Task:**
+
+```bash
+POST /api/v1/autofix/submit
+Content-Type: application/json
+
+{
+  "repo_url": "https://github.com/psf/requests",
+  "issue_description": "Add type hints to Session class in requests/sessions.py",
+  "model": "gpt-4o-mini",
+  "temperature": 0.2
+}
+
+# Response:
+{
+  "task_id": "fix_abc123",
+  "status": "submitted",
+  "estimated_time": "30-120 seconds"
+}
+```
+
+**Check Status:**
+
+```bash
+GET /api/v1/autofix/status/fix_abc123
+
+# Response (Completed):
+{
+  "task_id": "fix_abc123",
+  "status": "completed",
+  "patch_url": "/outputs/fix_abc123.patch",
+  "files_modified": 1,
+  "lines_added": 25
+}
+```
+
+**Download & Apply Patch:**
+
+```bash
+# Download
+curl http://localhost:8080/outputs/fix_abc123.patch > fix.patch
+
+# Apply
+git apply fix.patch
+```
+
+
+
+### 3. Use AutoFix (Automated Code Fixing) 🆕
+
+**Via Frontend:**
+
+1. Navigate to **AutoFix** tab
+2. Enter repository URL: `https://github.com/psf/requests`
+3. Describe the issue:
+   ```
+   Add type hints to the Session class in requests/sessions.py.
+   Include hints for __init__, request, get, post methods.
+   Use typing module (Dict, List, Optional).
+   ```
+4. Select model:
+   - **GPT-4o-mini**: Fast, cost-effective (10-30s)
+   - **GPT-4o**: Balanced (30-90s)
+   - **GPT-4 Turbo**: Best quality (60-180s)
+5. Adjust temperature:
+   - **0.0-0.2**: Deterministic fixes
+   - **0.3-0.5**: Balanced
+   - **0.6-1.0**: Creative solutions
+6. Click "Generate Fix"
+7. Wait for completion (10s - 10min)
+8. Preview patch with syntax highlighting
+9. Download and apply
+
+**Via API:**
+
+```bash
+# Submit task
+curl -X POST http://localhost:8080/api/v1/autofix/submit   -H "Content-Type: application/json"   -d '{
+    "repo_url": "https://github.com/psf/requests",
+    "issue_description": "Add type hints to Session class",
+    "model": "gpt-4o-mini",
+    "temperature": 0.2
+  }'
+
+# Check status
+curl http://localhost:8080/api/v1/autofix/status/{task_id}
+
+# Download patch
+curl http://localhost:8080/outputs/{task_id}.patch > fix.patch
+
+# Apply
+git apply fix.patch
+```
+
+**Best Practices:**
+
+✅ **DO:**
+- Be specific about files to modify
+- Provide examples of desired output
+- Use appropriate model for complexity
+- Test patches before committing
+- Review patches carefully
+
+❌ **DON'T:**
+- Request major architectural changes
+- Provide vague descriptions
+- Apply without reviewing
+- Use high temperature for critical fixes
+
+
 ### 3. View Analytics
 
 ```bash
@@ -487,6 +706,19 @@ GET /api/repository/analytics/compare-commits?from=abc123&to=def456
 
 ```
 RepoWise/
+
+│
+├── docker/                           # Docker configurations
+│   └── autofix/
+│       ├── auto-code-rover/          # AutoCodeRover source (cleaned)
+│       ├── Dockerfile                # Custom ACR build
+│       ├── wrapper_api.py            # FastAPI wrapper
+│       └── .env.example             # ACR environment
+│
+├── docs/                             # Documentation
+│   ├── AUTOFIX_SETUP.md             # AutoFix setup guide
+│   ├── API.md                       # API documentation  
+│   └── EOTDR.docx                   # End of Term Report
 ├── Repowise-backend/
 │   ├── app/
 │   │   ├── api/                      # API Endpoints
@@ -549,6 +781,69 @@ Solution:
 - Create new venv: py -3.11 -m venv .venv
 ```
 
+
+**3. Docker AutoCodeRover Issues**
+
+```
+Error: AutoCodeRover container unhealthy
+```
+
+**Solutions:**
+
+```bash
+# Check container status
+docker-compose ps
+
+# View logs
+docker logs repowise-autocoderover
+
+# Restart service
+docker-compose restart autocoderover
+
+# Rebuild if needed
+docker-compose build --no-cache autocoderover
+docker-compose up -d
+```
+
+**4. AutoFix Timeout**
+
+```
+Error: Task timeout after 10 minutes
+```
+
+**Solutions:**
+
+```bash
+# Increase timeout in docker-compose.yml
+# environment:
+#   - TASK_TIMEOUT=1800  # 30 minutes
+
+# Restart services
+docker-compose down && docker-compose up -d
+
+# Or target specific files in issue description
+```
+
+**5. Out of Memory (AutoFix)**
+
+```
+Error: Container killed due to OOM
+```
+
+**Solutions:**
+
+```bash
+# Increase Docker Desktop memory
+# Settings → Resources → Memory → 16GB
+
+# Adjust limits in docker-compose.yml
+# deploy:
+#   resources:
+#     limits:
+#       memory: 12G
+```
+
+
 **3. ChromaDB Error**
 ```
 Error: Metadata validation failed
@@ -607,7 +902,7 @@ Solution:
 - **İbrahim Baran Yıldız** - Multi-Agent Integration
 
 **Course:** BBM479 - Graduation Project  
-**Supervisor:** [Supervisor Name]  
+**Supervisor:** Asst. Prof. Tuğba Gürgen Erdoğan  
 **University:** Hacettepe University - Computer Engineering  
 **Year:** 2024-2025
 
@@ -642,17 +937,17 @@ Special thanks to:
 ## 📊 Project Statistics
 
 **Lines of Code:** ~15,000+  
-**API Endpoints:** 29  
-**Services:** 12  
+**API Endpoints:** 31  
+**Services:** 15  
 **Database:** Neo4j (Graph) + ChromaDB (Vector)  
 **Test Coverage:** Integration tests included  
 **Documentation:** Comprehensive guides + Swagger
 
 ---
 
-**Current Version:** 0.3.0 (Phase 3 Complete)  
+**Current Version:** 1.0.0 (Phase 4 Complete)  
 **Status:** ✅ Production Ready  
-**Last Updated:** December 22, 2024
+**Last Updated:** February 22, 2025
 
 ---
 
