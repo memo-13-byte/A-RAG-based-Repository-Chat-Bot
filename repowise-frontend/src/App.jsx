@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import ChatWindow from "./components/ChatWindow"
 import RepositorySelector from "./components/RepositorySelector"
 import GraphVisualization from "./components/GraphVisualization"
-import AutoFix from "./components/AutoFix"
+import AutoFix from "./components/Autofix"
 
 // React Query client
 const queryClient = new QueryClient({
