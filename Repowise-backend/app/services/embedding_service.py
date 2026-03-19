@@ -189,7 +189,7 @@ def get_embedding_service(model_name: str = "minilm") -> EmbeddingService:
 
 
 # Export singleton for easy import (for RAG service compatibility)
-embeddings_service = get_embedding_service("minilm")
+embeddings_service = get_embedding_service("mpnet")
 
 
 # Utility functions for code preprocessing

@@ -122,23 +122,23 @@ def get_optimal_max_tokens(query: str, context_length: int = 0) -> int:
     # SIMPLE factual queries → Short answers
     if any(word in query_lower for word in ['what is', 'when', 'who', 'which', 'where']):
         if len(query.split()) <= 8:
-            return 1200
+            return 1500
 
     # LIST queries → Medium answers
     if any(word in query_lower for word in ['list', 'show all', 'enumerate', 'what are']):
-        return 1200
+        return 1500
 
     # EXPLANATION queries → Long answers
     if any(word in query_lower for word in ['explain', 'how', 'why', 'describe', 'tell me about']):
-        return 1200
+        return 2000
 
     # COMPARISON queries → Very long answers
     if any(word in query_lower for word in ['compare', 'difference', 'versus', 'vs']):
-        return 1500
+        return 2000
 
     # TUTORIAL/GUIDE queries → Extra long answers
     if any(word in query_lower for word in ['tutorial', 'guide', 'walkthrough', 'step by step']):
-        return 2000
+        return 2500
 
     # CODE GENERATION queries → Based on context, but generous
     if any(word in query_lower for word in ['generate', 'create', 'write code', 'implement']):
@@ -149,7 +149,7 @@ def get_optimal_max_tokens(query: str, context_length: int = 0) -> int:
         return 1500
 
     # Default: Medium
-    return 800
+    return 1500
 
 
 def should_use_cot(query: str) -> bool:

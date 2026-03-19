@@ -7,6 +7,7 @@ FIXED: Safe attribute access + RECURSIVE file tree fetching
 import logging
 from typing import Dict, List, Optional, Tuple, Any
 
+import os
 import requests
 from github import Github, GithubException
 from github.Repository import Repository
@@ -268,6 +269,89 @@ class GitHubService:
         except Exception as e:
             logger.error(f"Error fetching repository stats: {e}")
             raise ValueError(f"Failed to fetch stats: {str(e)}")
+
+    def get_commit_line_stats(self, repo_url: str, num_commits: int = 50) -> dict:
+        """Get total lines added/deleted for last N commits via GitHub API"""
+        try:
+            owner, repo = self.parse_repo_url(repo_url)
+            repo_name = f"{owner}/{repo}"
+            token = os.getenv("GITHUB_TOKEN")
+            headers = {"Authorization": f"token {token}"} if token else {}
+
+            # Neo4j'den son N commit SHA'larını al
+            from .neo4j_service import neo4j_service
+            full_repo_name = repo_name
+            with neo4j_service._driver.session() as session:
+                result = session.run("""
+                    MATCH (c:Commit {repository: $repo})
+                    RETURN c.sha as sha
+                    ORDER BY c.date DESC
+                    LIMIT $limit
+                """, repo=full_repo_name, limit=num_commits)
+                shas = [r['sha'] for r in result]
+
+            if not shas:
+                return {"error": "No commits found"}
+
+            total_additions = 0
+            total_deletions = 0
+
+            for sha in shas:
+                url = f"https://api.github.com/repos/{repo_name}/commits/{sha}"
+                resp = requests.get(url, headers=headers)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    stats = data.get('stats', {})
+                    total_additions += stats.get('additions', 0)
+                    total_deletions += stats.get('deletions', 0)
+                import time
+                time.sleep(0.1)  # Rate limit için
+
+            return {
+                "commits_analyzed": len(shas),
+                "total_additions": total_additions,
+                "total_deletions": total_deletions
+            }
+        except Exception as e:
+            logger.error(f"get_commit_line_stats error: {e}")
+            return {}
+
+    def get_contributor_additions(self, repo_url: str) -> list:
+        try:
+            owner, repo_name = self.parse_repo_url(repo_url)
+            import time, requests as req
+            import os
+
+            token = os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_API_TOKEN")
+            headers = {"Authorization": f"token {token}"} if token else {}
+
+            for attempt in range(3):
+                response = req.get(
+                    f"https://api.github.com/repos/{owner}/{repo_name}/stats/contributors",
+                    headers=headers
+                )
+                if response.status_code == 200:
+                    break
+                elif response.status_code == 202:
+                    time.sleep(2)
+                else:
+                    return []
+
+            result = []
+            for contributor in response.json():
+                total_additions = sum(w['a'] for w in contributor.get('weeks', []))
+                total_deletions = sum(w['d'] for w in contributor.get('weeks', []))
+                result.append({
+                    'login': contributor['author']['login'],
+                    'additions': total_additions,
+                    'deletions': total_deletions,
+                    'commits': contributor.get('total', 0)
+                })
+            result.sort(key=lambda x: x['additions'], reverse=True)
+            return result[:10]
+        except Exception as e:
+            logger.error(f"Error getting contributor additions: {e}")
+            return []
 
     def get_readme(self, repo_url: str) -> Optional[str]:
         """

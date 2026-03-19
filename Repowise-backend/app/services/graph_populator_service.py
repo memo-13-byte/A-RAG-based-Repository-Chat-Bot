@@ -55,11 +55,6 @@ class GraphPopulatorService:
         }
 
         try:
-            # Connect to Neo4j
-            if not self.neo4j.connect():
-                logger.error("Failed to connect to Neo4j")
-                return stats
-
             # Create file node first
             file_name = file_path.split('/')[-1]
             extension = '.' + file_name.split('.')[-1] if '.' in file_name else ''
@@ -99,15 +94,6 @@ class GraphPopulatorService:
                 if success:
                     stats["classes"] += 1
 
-                    # Create inheritance relationships
-                    for base_class in (cls.base_classes or []):
-                        self.neo4j.create_inheritance_relationship(
-                            repo_name=repo_name,
-                            derived_class=cls.name,
-                            base_class=base_class,
-                            file_path=file_path
-                        )
-                        stats["relationships"] += 1
 
             # Create function nodes
             for func in entities['functions']:
@@ -177,6 +163,11 @@ class GraphPopulatorService:
         }
 
         try:
+            # Connect to Neo4j
+            if not self.neo4j.connect():
+                logger.error("Failed to connect to Neo4j")
+                return total_stats
+
             # Create repository node
             repo_name = repo_info.get('full_name', 'unknown/unknown')
 
@@ -205,6 +196,29 @@ class GraphPopulatorService:
                 total_stats["functions"] += file_stats["functions"]
                 total_stats["imports"] += file_stats["imports"]
                 total_stats["relationships"] += file_stats["relationships"]
+
+
+            # === 2. PASS: Inheritance relationships ===
+            # Tüm class node'ları oluştuktan sonra inheritance ekle
+            logger.info("Starting inheritance pass...")
+            for file_info in files:
+                file_path = file_info.get('path')
+                content = file_info.get('content', '')
+                if not file_path or not content:
+                    continue
+                if file_info.get('language', 'python').lower() != 'python':
+                    continue
+                entities = self.code_parser.extract_python_entities(file_path, content)
+                for cls in entities['classes']:
+                    for base_class in (cls.base_classes or []):
+                        self.neo4j.create_inheritance_relationship(
+                            repo_name=repo_name,
+                            derived_class=cls.name,
+                            base_class=base_class,
+                            file_path=file_path
+                        )
+                        total_stats["relationships"] += 1
+            logger.info("Inheritance pass complete")
 
             logger.info(f"Repository {repo_name} populated: {total_stats}")
             return total_stats

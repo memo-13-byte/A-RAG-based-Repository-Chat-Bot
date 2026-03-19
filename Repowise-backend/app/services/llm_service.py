@@ -22,6 +22,7 @@ class LLMProvider(str, Enum):
     """Supported LLM providers"""
     GROQ = "groq"
     OPENAI = "openai"
+    GEMINI = "gemini"
     FALLBACK = "fallback"
 
 
@@ -32,6 +33,10 @@ class LLModel(str, Enum):
     LLAMA_3_1_8B = "llama-3.1-8b-instant"      # Fast
     MIXTRAL = "mixtral-8x7b-32768"              # Good for code
 
+
+    # Gemini models (FREE)
+    GEMINI_FLASH = "gemini-1.5-flash"
+    GEMINI_PRO = "gemini-1.5-pro"
     # OpenAI models (PAID)
     GPT_3_5_TURBO = "gpt-3.5-turbo"
     GPT_4 = "gpt-4"
@@ -77,8 +82,10 @@ class LLMService:
         if model is None:
             if provider == LLMProvider.GROQ:
                 model = LLModel.LLAMA_3_3_70B.value  # NEW
+            elif provider == LLMProvider.GEMINI:
+                model = "gemini-2.5-flash"
             elif provider == LLMProvider.OPENAI:
-                model = LLModel.GPT_3_5_TURBO.value
+                model = "gpt-4o"
             else:
                 model = "fallback"
 
@@ -100,6 +107,10 @@ class LLMService:
         if os.getenv("GROQ_API_KEY"):
             logger.info("Groq API key detected (FREE & FAST)")
             return LLMProvider.GROQ
+        # Check Gemini (priority 2 - FREE)
+        if os.getenv("GEMINI_API_KEY"):
+            logger.info("Gemini API key detected (FREE)")
+            return LLMProvider.GEMINI
 
         # Check OpenAI (priority 2 - PAID)
         if os.getenv("OPENAI_API_KEY"):
@@ -115,6 +126,9 @@ class LLMService:
         try:
             if self.provider == LLMProvider.GROQ:
                 return self._initialize_groq()
+
+            elif self.provider == LLMProvider.GEMINI:
+                return self._initialize_gemini()
 
             elif self.provider == LLMProvider.OPENAI:
                 return self._initialize_openai()
@@ -151,7 +165,24 @@ class LLMService:
             logger.error(f"Groq initialization failed: {e}")
             raise
 
-    def _initialize_openai(self):
+    def _initialize_gemini(self):
+        """Initialize Gemini client"""
+        try:
+            import google.generativeai as genai
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                raise ValueError("GEMINI_API_KEY not found")
+            genai.configure(api_key=api_key)
+            logger.info(f"Initializing Gemini with model: {self.model}")
+            return genai.GenerativeModel(self.model)
+        except ImportError:
+            logger.error("Google GenerativeAI not installed. Run: pip install google-generativeai")
+            raise
+        except Exception as e:
+            logger.error(f"Gemini initialization failed: {e}")
+            raise
+
+    #def _initialize_openai(self):
         """Initialize OpenAI client"""
         try:
             from langchain_openai import ChatOpenAI
@@ -170,6 +201,22 @@ class LLMService:
 
         except ImportError:
             logger.error("LangChain OpenAI package not installed")
+            raise
+        except Exception as e:
+            logger.error(f"OpenAI initialization failed: {e}")
+            raise
+
+    def _initialize_openai(self):
+        """Initialize OpenAI client"""
+        try:
+            from openai import OpenAI
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY not found")
+            logger.info(f"Initializing OpenAI with model: {self.model}")
+            return OpenAI(api_key=api_key)
+        except ImportError:
+            logger.error("OpenAI package not installed. Run: pip install openai")
             raise
         except Exception as e:
             logger.error(f"OpenAI initialization failed: {e}")
@@ -199,6 +246,9 @@ class LLMService:
             # Route to appropriate provider
             if self.provider == LLMProvider.GROQ and self.llm:
                 return self._generate_groq(prompt, system_message, chat_history, **kwargs)
+
+            elif self.provider == LLMProvider.GEMINI and self.llm:
+                return self._generate_gemini(prompt, system_message, chat_history, **kwargs)
 
             elif self.provider == LLMProvider.OPENAI and self.llm:
                 return self._generate_openai(prompt, system_message, chat_history, **kwargs)
@@ -263,7 +313,7 @@ class LLMService:
 
         # Add max_tokens if not in kwargs
         if "max_tokens" not in kwargs:
-            params["max_tokens"] = self.max_tokens or 500
+            params["max_tokens"] = self.max_tokens or 1500
 
         # Merge kwargs (they will override defaults if present)
         params.update(kwargs)
@@ -273,38 +323,41 @@ class LLMService:
 
         return response.choices[0].message.content
 
-    def _generate_openai(
-        self,
-        prompt: str,
-        system_message: Optional[str],
-        chat_history: Optional[List[Dict[str, str]]],
-        **kwargs
-    ) -> str:
-        """Generate response using OpenAI (LangChain)"""
-        from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-
-        logger.info(f"Generating with OpenAI ({self.model})")
-
-        messages = []
-
-        # Add system message
+    def _generate_gemini(self, prompt, system_message, chat_history, **kwargs):
+        """Generate response using Gemini"""
+        logger.info(f"Generating with Gemini ({self.model})")
+        full_prompt = ""
         if system_message:
-            messages.append(SystemMessage(content=system_message))
-
-        # Add chat history
+            full_prompt += f"{system_message}\n\n"
         if chat_history:
             for msg in chat_history:
-                if msg["role"] == "user":
-                    messages.append(HumanMessage(content=msg["content"]))
-                elif msg["role"] == "assistant":
-                    messages.append(AIMessage(content=msg["content"]))
+                role = "User" if msg["role"] == "user" else "Assistant"
+                full_prompt += f"{role}: {msg['content']}\n"
+        full_prompt += f"User: {prompt}"
+        response = self.llm.generate_content(full_prompt)
+        return response.text
 
-        # Add current prompt
-        messages.append(HumanMessage(content=prompt))
+    def _generate_openai(self, prompt, system_message, chat_history, **kwargs):
+        """Generate response using OpenAI"""
+        logger.info(f"Generating with OpenAI ({self.model})")
+        messages = []
+        if system_message:
+            messages.append({"role": "system", "content": system_message})
+        else:
+            messages.append(
+                {"role": "system", "content": "You are a helpful AI assistant specializing in code repositories."})
+        if chat_history:
+            for msg in chat_history:
+                messages.append({"role": msg["role"], "content": msg["content"]})
+        messages.append({"role": "user", "content": prompt})
 
-        # Generate response
-        response = self.llm.invoke(messages, **kwargs)
-        return response.content
+        response = self.llm.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens or 2000
+        )
+        return response.choices[0].message.content
 
     async def generate_stream(
             self,
@@ -360,7 +413,7 @@ class LLMService:
 
             # Add max_tokens
             if "max_tokens" not in kwargs:
-                params["max_tokens"] = self.max_tokens or 500
+                params["max_tokens"] = self.max_tokens or 1500
             else:
                 params["max_tokens"] = kwargs["max_tokens"]
 

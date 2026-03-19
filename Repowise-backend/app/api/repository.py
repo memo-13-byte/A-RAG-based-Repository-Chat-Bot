@@ -107,8 +107,8 @@ async def analyze_repository(repository_url: str, background_tasks: BackgroundTa
 async def index_repository(
         repo_url: str = Query(..., description="Repository URL (GitHub or GitLab)"),
         include_commits: bool = Query(True, description="Index commit history"),
-        max_commits: int = Query(100, ge=10, le=1000, description="Maximum commits to index"),
-        max_files: int = Query(500, ge=10, le=2000, description="Maximum files to index"),
+        max_commits: int = Query(7000, ge=10, le=10000, description="Maximum commits to index"),
+        max_files: int = Query(1000, ge=10, le=5000, description="Maximum files to index"),
         force_reindex: bool = Query(False, description="Force re-indexing")
 ):
     """
@@ -130,20 +130,30 @@ async def index_repository(
 
     Examples:
         POST /api/repository/index?repo_url=https://github.com/psf/requests
-        POST /api/repository/index?repo_url=https://github.com/psf/requests&include_commits=true&max_commits=100
+        POST /api/repository/index?repo_url=https://github.com/psf/requests&include_commits=true&max_commits=500
     """
     try:
         logger.info(f"Indexing repository: {repo_url}")
         logger.info(f"Parameters: include_commits={include_commits}, max_commits={max_commits}, max_files={max_files}")
 
         if include_commits:
-            # Index with commit history
-            result = rag_service.index_with_commits(
+            # First index code files (vector embeddings)
+            result = rag_service.index_repository(
                 repo_url=repo_url,
-                max_commits=max_commits,
                 max_files=max_files,
                 force_reindex=force_reindex
             )
+            # Then add commit history on top
+            commit_result = rag_service.index_with_commits(
+                repo_url=repo_url,
+                max_commits=max_commits,
+                max_files=max_files,
+                force_reindex=False  # Don't wipe what we just indexed
+            )
+            # Merge results
+            result["commits_indexed"] = commit_result.get("commits_indexed", 0)
+            result["authors_found"] = commit_result.get("authors_found", 0)
+
         else:
             # Index without commits (vector only)
             result = rag_service.index_repository(
@@ -167,7 +177,7 @@ async def index_repository(
 @router.get("/analytics/hot-spots")
 async def get_hot_spots(
         repo_name: str = Query(..., description="Repository full name (e.g., 'owner/repo')"),
-        limit: int = Query(20, ge=1, le=100, description="Maximum number of hot spots")
+        limit: int = Query(50, ge=1, le=500, description="Maximum number of hot spots")
 ):
     """
     Get code hot spots (frequently modified files)
@@ -211,7 +221,7 @@ async def get_hot_spots(
 @router.get("/analytics/contributors")
 async def get_contributors(
         repo_name: str = Query(..., description="Repository full name (e.g., 'owner/repo')"),
-        limit: int = Query(10, ge=1, le=50, description="Maximum number of contributors")
+        limit: int = Query(25, ge=1, le=200, description="Maximum number of contributors")
 ):
     """
     Get top contributors
@@ -255,7 +265,7 @@ async def get_contributors(
 @router.get("/analytics/file-history")
 async def get_file_history(
         file_path: str = Query(..., description="File path in repository"),
-        limit: int = Query(50, ge=1, le=100, description="Maximum number of commits")
+        limit: int = Query(100, ge=1, le=500, description="Maximum number of commits")
 ):
     """
     Get commit history for a specific file

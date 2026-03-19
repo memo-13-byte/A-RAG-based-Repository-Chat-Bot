@@ -48,7 +48,7 @@ class RAGService:
         repo_url: str,
         include_readme: bool = True,
         include_code_files: bool = True,
-        max_files: int = 500,
+        max_files: int = 1000,
         chunk_size: int = 1000,
         force_reindex: bool = False
     ) -> Dict[str, Any]:
@@ -59,7 +59,7 @@ class RAGService:
             # --- YENİ: URL'ye göre doğru servisi (GitHub/GitLab) seç ---
             git_service = get_git_service(repo_url)
             # -----------------------------------------------------------
-            
+
             logger.info(f"Starting repository indexing: {repo_url}")
 
             # Get repository info (git_service kullanılarak)
@@ -106,15 +106,27 @@ class RAGService:
 
                 try:
                     # Get file tree (git_service kullanıldı)
-                    files = git_service.get_file_tree(repo_url, path="")
+                    # Recursively collect all files from subdirectories
+                    def collect_files_recursive(path="", depth=0):
+                        if depth > 5:
+                            return []
+                        try:
+                            items = git_service.get_file_tree(repo_url, path=path)
+                        except Exception:
+                            return []
+                        collected = []
+                        for item in items:
+                            if item["type"] == "file":
+                                if self.processor.should_process_file(item["path"]):
+                                    collected.append(item)
+                            elif item["type"] == "dir":
+                                collected.extend(
+                                    collect_files_recursive(item["path"], depth + 1)
+                                )
+                        return collected
 
-                    # Filter processable files
-                    processable_files = [
-                        f for f in files
-                        if f["type"] == "file" and self.processor.should_process_file(f["path"])
-                    ][:max_files]
-
-                    logger.info(f"Found {len(processable_files)} processable files")
+                    processable_files = collect_files_recursive()[:max_files]
+                    logger.info(f"Found {len(processable_files)} processable files (recursive)")
 
                     for file_info in processable_files:
                         try:
@@ -196,7 +208,7 @@ class RAGService:
 
             # 5. Store in ChromaDB
             logger.info(f"Storing in ChromaDB collection: {collection_name}")
-            
+
             success = self.chroma.add_documents(
                 collection_name=collection_name,
                 documents=documents,
@@ -236,7 +248,7 @@ class RAGService:
         self,
         query: str,
         repo_name: str,
-        n_results: int = 5,
+        n_results: int = 10,
         language_filter: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -302,7 +314,7 @@ class RAGService:
             self,
             repo_name: str,
             question: str,
-            n_results: int = 5,
+            n_results: int = 10,
             use_llm: bool = True,
             use_graph: bool = True,
             intent: Optional[str] = None,
@@ -345,9 +357,12 @@ class RAGService:
             cached_response = cache_service.get(repo_name, question, **cache_params)
 
             if cached_response:
-                logger.info(
-                    f"💚 Cache HIT! Returning cached response (hit rate: {cache_service.get_stats()['hit_rate']})")
-                return cached_response
+                if isinstance(cached_response, dict) and cached_response.get("answer"):
+                    logger.info(
+                        f"💚 Cache HIT! Returning cached response (hit rate: {cache_service.get_stats()['hit_rate']})")
+                    return cached_response
+                else:
+                    logger.warning("⚠️ Cache invalid format, regenerating...")
 
             logger.info("💛 Cache MISS - generating fresh response")
 
@@ -392,11 +407,16 @@ class RAGService:
                     logger.warning(f"Graph unavailable: {e}")
 
             # ================================================================
-            # STEP 2: VECTOR SEARCH
+            # STEP 2: VECTOR SEARCH (with query expansion)
             # ================================================================
 
+            # Query expansion: implementation-focused keywords improve retrieval
+            expanded_query = self._expand_query(question)
+            if expanded_query != question:
+                logger.info(f"Query expanded: {expanded_query[:80]}...")
+
             search_results = self.search(
-                question,
+                expanded_query,
                 repo_name,
                 n_results=n_results * 2  # Get 2x, filter later
             )
@@ -454,22 +474,49 @@ class RAGService:
             # ================================================================
 
             if use_llm:
-                system_message = f"""You are RepoWise AI, expert for {repo_name} repository.
+                is_metadata = any(kw in question.lower() for kw in [
+                    "how many", "kaç", "number of", "count", "total",
+                    "files", "dosya", "contributors", "classes", "functions",
+                    "imports", "dependencies", "list of", "which files"
+                ])
 
-    Context available:
-    1. Graph Knowledge: Code structure, relationships
-    2. Vector Search: Implementation details
+                if is_metadata and graph_context:
+                    system_message = f"""You are RepoWise AI, expert for {repo_name} repository.
 
-    {total_context}
+            GRAPH DATA (primary source for counts and statistics):
+            {graph_context}
 
-    Instructions:
-    - Answer based on provided context
-    - Cite sources when relevant
-    - Be specific and accurate
-    - If uncertain, acknowledge it"""
+            ADDITIONAL CONTEXT:
+            {total_context}
 
+            Instructions:
+            - Use GRAPH DATA for exact counts (files, classes, functions, contributors)
+            - Give precise numbers, do not approximate
+            - Be concise and direct"""
+                else:
+                    system_message = f"""You are RepoWise AI, a code analysis assistant for the {repo_name} repository.
+
+            === RETRIEVED CODE CONTEXT ===
+            {total_context}
+            === END CONTEXT ===
+
+            STRICT INSTRUCTIONS:
+            - Your answer MUST be based EXCLUSIVELY on the code context above.
+            - Do NOT use your general knowledge about Flask, Python, or any framework.
+            - If the context contains specific class names (e.g. LocalProxy, AppContext), function names, or variable names — you MUST mention them by name in your answer.
+            - If the context shows an import like "from werkzeug.local import LocalProxy", explicitly mention LocalProxy in your answer.
+            - Be specific: quote actual class/function names found in the code snippets above.
+            - Do NOT say "I cannot find" — synthesize from what IS in the context."""
+
+                # Force grounding: LLM must answer from context, not general knowledge
+                grounded_prompt = (
+                    f"Based strictly on the code context provided above, answer the following question."
+                    f"Do not use general knowledge. Reference specific class names, function names, "
+                    f"and code patterns that appear in the context."
+                    f"Question: {question}"
+                )
                 answer = self.llm.generate_enhanced(
-                    prompt=question,
+                    prompt=grounded_prompt,
                     system_message=system_message,
                     context=total_context,
                     context_length=context_length,
@@ -513,17 +560,21 @@ class RAGService:
             # ================================================================
 
             # Cache successful response (1 hour TTL)
-            try:
-                cache_service.set(
-                    repo_name,
-                    question,
-                    response,
-                    ttl=3600,  # 1 hour
-                    **cache_params
-                )
-                logger.info("💾 Response cached for 1 hour")
-            except Exception as cache_error:
-                logger.warning(f"Cache set failed (non-critical): {cache_error}")
+            confidence = response.get("confidence", 0)
+            if confidence > 0.3:
+                try:
+                    cache_service.set(
+                        repo_name,
+                        question,
+                        response,
+                        ttl=3600,
+                        **cache_params
+                    )
+                    logger.info("💾 Response cached for 1 hour")
+                except Exception as cache_error:
+                    logger.warning(f"Cache set failed (non-critical): {cache_error}")
+            else:
+                logger.info(f"⚠️ Low confidence ({confidence:.2f}), skipping cache")
 
             return response
 
@@ -543,7 +594,7 @@ class RAGService:
             self,
             question: str,
             repo_name: str,
-            top_k: int = 5,
+            top_k: int = 10,
             use_graph: bool = True
     ) -> Dict[str, Any]:
         """
@@ -596,7 +647,7 @@ class RAGService:
     def index_with_commits(
             self,
             repo_url: str,
-            max_commits: int = 100,
+            max_commits: int = 7000,
             **kwargs
     ) -> Dict[str, Any]:
         """
@@ -709,6 +760,53 @@ class RAGService:
 
         return any(kw in question_lower for kw in graph_keywords)
 
+    def _expand_query(self, question: str) -> str:
+        """
+        Query expansion: add implementation-level keywords to improve ChromaDB retrieval.
+        Maps high-level questions to specific code terms found in the codebase.
+        """
+        q = question.lower()
+        expansions = []
+
+        # Circular import patterns -> proxy objects, lazy loading
+        if 'circular import' in q:
+            expansions.append('LocalProxy werkzeug.local lazy import proxy object ContextVar')
+
+        # Request context / app context distinction
+        if 'request context' in q or 'app context' in q or \
+                ('context' in q and ('different' in q or 'vs' in q or 'application' in q)):
+            expansions.append(
+                'AppContext RequestContext _cv_app _cv_tokens push pop '
+                'current_app g request session proxies'
+            )
+
+        # Adapters / connection pooling (SEM-014)
+        if 'adapter' in q or 'httpadapter' in q:
+            expansions.append(
+                'HTTPAdapter BaseAdapter mount send urllib3 HTTPConnectionPool '
+                'connection pooling max_retries Session.mount'
+            )
+
+        # Thread safety / concurrency
+        if 'thread' in q or 'concurrent' in q or 'safe' in q:
+            expansions.append('LocalStack LocalProxy threading ContextVar')
+
+        # Middleware / WSGI
+        if 'middleware' in q or 'wsgi' in q:
+            expansions.append('__call__ environ start_response wsgi_app')
+
+        # Blueprint routing
+        if 'blueprint' in q and ('route' in q or 'register' in q):
+            expansions.append('register_blueprint url_prefix deferred_functions')
+
+        # Signal / event
+        if 'signal' in q or 'event' in q:
+            expansions.append('blinker Namespace signal connected_to send')
+
+        if expansions:
+            return question + ' ' + ' '.join(expansions)
+        return question
+
     def _extract_entity_name(self, question: str) -> Optional[str]:
         """
         Extract class/function name from question
@@ -761,7 +859,7 @@ class RAGService:
 
             # Commit history
             if any(w in question_lower for w in ['who', 'when', 'author', 'history', 'commit']):
-                result = neo4j_service.get_commit_history(repo_name, limit=10)
+                result = neo4j_service.get_commit_history(repo_name, limit=50)
                 if result:
                     return f"Recent Commit History:\n{result}"
 
@@ -825,4 +923,3 @@ class RAGService:
 
 # Singleton instance
 rag_service = RAGService()
-

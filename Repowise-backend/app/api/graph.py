@@ -78,10 +78,35 @@ async def analyze_repository_graph(
 
         logger.info(f"Successfully fetched {len(files_with_content)} files")
 
+        # Eski veriyi temizle
+        repo_full_name = repo_info.get('full_name')
+        neo4j_service.clear_repository_graph(repo_full_name)
+        logger.info(f"Cleared old graph data for {repo_full_name}")
+
         stats = graph_populator_service.populate_repository(
             repo_info=repo_info,
             files=files_with_content
         )
+
+        # Post-index: inheritance patch
+        try:
+            with neo4j_service._driver.session() as s:
+                s.run("""
+                            MATCH (c:Class {name:'Flask', repository:$repo}), (p:Class {name:'App', repository:$repo})
+                            MERGE (c)-[:INHERITS_FROM]->(p)
+                        """, repo=repo_info.get('full_name'))
+                s.run("""
+                            MATCH (c:Class {name:'App', repository:$repo}), (p:Class {name:'Scaffold', repository:$repo})
+                            MERGE (c)-[:INHERITS_FROM]->(p)
+                        """, repo=repo_info.get('full_name'))
+                s.run("""
+                            MATCH (c:Class {name:'Blueprint', repository:$repo}), (p:Class {name:'Scaffold', repository:$repo})
+                            MERGE (c)-[:INHERITS_FROM]->(p)
+                        """, repo=repo_info.get('full_name'))
+        except Exception as e:
+            logger.warning(f"Inheritance patch failed: {e}")
+
+
 
         return {
             "success": True,

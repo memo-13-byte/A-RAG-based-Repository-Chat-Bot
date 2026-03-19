@@ -11,6 +11,7 @@ ENHANCEMENTS ADDED:
 import json
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+import asyncio
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from datetime import datetime
@@ -18,6 +19,8 @@ from ..services.git_factory import get_git_service
 from ..services.llm_service import llm_service
 from ..services.rag_service import rag_service
 from ..services.memory_service import memory_service
+from ..services.neo4j_service import neo4j_service
+from ..services.intent_router  import classify as classify_intent
 import logging
 import re
 import uuid
@@ -215,15 +218,21 @@ def is_commit_question(message_lower: str) -> bool:
         True if question is commit-related
     """
     commit_keywords = [
-        # Commit questions
-        "commit", "commits", "committed", "latest commit", "recent commit",
-        "last commit", "commit history", "commit message",
+        # Commit questions - specific phrases only
+        "latest commit", "recent commit", "last commit",
+        "commit message", "show commit",
+        "show commits", "list commits", "recent commits",
+        "committed",
         # Diff questions
-        "diff", "difference", "differences", "changed", "changes",
-        "what changed", "show diff", "compare commit",
+        "diff", "show diff", "compare commit",
+        "what changed", "changed in", "changes in",
         # Turkish
-        "değişiklik", "fark", "ne değişti", "son commit"
+        "fark", "ne değişti", "son commit"
     ]
+
+    # "how many commits" → analytics, not commit diff
+    if any(kw in message_lower for kw in ["how many commit", "total commit", "number of commit", "kaç commit"]):
+        return False
 
     return any(keyword in message_lower for keyword in commit_keywords)
 
@@ -248,13 +257,30 @@ def is_analytics_question(message_lower: str) -> bool:
         "frequently changed", "frequently modified",
         # File history
         "file history", "history of", "changes to",
+        "last modified", "who modified", "who changed",
+        "commit history for", "changes made to",
         # Code owners
         "code owner", "owner of", "who owns",
         "who maintains", "maintainer",
         # Contributors
         "top contributor", "main contributor", "who contributed",
+        "most commits", "contributed the most", "lines added",
+        "percentage of commits",
+        # Commit counts
+        "how many commits", "total commits", "commit count",
+        "number of commits", "how many total commits",
         # Turkish
-        "en çok değişen", "dosya geçmişi", "kod sahibi"
+        "en çok değişen", "dosya geçmişi", "kod sahibi",
+        "toplam commit", "kaç commit",
+        "most changes to",
+        "commit history for",
+        "who last modified",
+        "over time",
+        "changes made to",
+        "functions defined in",
+        "what functions",
+        "classes defined in",
+        "what classes"
     ]
 
     return any(keyword in message_lower for keyword in analytics_keywords)
@@ -310,15 +336,20 @@ async def generate_rag_response(
             rag_result = rag_service.query(
                 repo_name=full_repo_name,
                 question=message,
-                n_results=3,
+                n_results=5,
                 use_llm=True,
                 use_graph=use_graph,
                 chat_history=chat_history  # ← YENİ PARAMETRE
             )
 
-            if rag_result.get("answer"):
+            if isinstance(rag_result, dict) and rag_result.get("answer"):
                 # Build sources from RAG
-                sources = [s["file_path"] for s in rag_result.get("sources", [])]
+                sources = []
+                for s in rag_result.get("sources", []):
+                    if isinstance(s, dict):
+                        sources.append(s.get("file_path", str(s)))
+                    else:
+                        sources.append(str(s))
                 sources.append(f"Repository: {full_repo_name}")
 
                 confidence = rag_result.get("confidence", 0.85)
@@ -364,7 +395,8 @@ async def generate_commit_diff_response(
     """
     try:
         from ..services.commit_diff_service import CommitDiffService
-        from ..services import github_service, neo4j_service_enhanced
+        from ..services import github_service, neo4j_service_enhanced, neo4j_service
+        enhanced = neo4j_service_enhanced.get_enhanced_queries(neo4j_service)
 
         diff_service = CommitDiffService(github_service, neo4j_service_enhanced)
         git_service = get_git_service(repository_url)
@@ -516,122 +548,87 @@ async def generate_commit_diff_response(
 async def generate_analytics_response(
     message: str,
     repository_url: str,
-    message_lower: str
+    message_lower: str,
+    intent: str = "analytics"
 ) -> tuple[Optional[str], List[str], float]:
-    """
-    Generate response for analytics questions
-
-    Returns:
-        Tuple of (response, sources, confidence)
-    """
     try:
-        from ..services import neo4j_service_enhanced
+        from ..services.entity_extractor import get_extractor
+        from ..services import query_planner, neo4j_service
+        from ..services import enhanced_neo4j as enhanced
+        from ..services.query_executor import QueryExecutor, format_result
 
         git_service = get_git_service(repository_url)
         owner, repo_name = git_service.parse_repo_url(repository_url)
         full_repo_name = f"{owner}/{repo_name}"
 
-        response_parts = []
-        sources = []
+        # 1. Entity extraction
+        entities = get_extractor().extract(message)
 
-        # Hot spots detection
-        if "hot spot" in message_lower or "most changed" in message_lower or "frequently" in message_lower:
-            response_parts.append(f"## 🔥 Hot Spots Analysis\n\n")
-            response_parts.append(f"*Most frequently modified files:*\n\n")
+        # 2. Query planning
+        strategy = query_planner.plan(intent, entities)
 
-            hot_spots = neo4j_service_enhanced.get_hot_spots(full_repo_name, limit=10)
+        # 3. Execute
+        executor = QueryExecutor(neo4j_service, enhanced, get_git_service)
+        result = await executor.execute(strategy, entities, full_repo_name, repository_url)
 
-            if hot_spots:
-                for i, spot in enumerate(hot_spots, 1):
-                    response_parts.append(
-                        f"{i}. **{spot['file']}**\n"
-                        f"   - Modifications: {spot['modifications']}\n"
-                        f"   - Changes: +{spot['additions']} -{spot['deletions']}\n\n"
-                    )
-                sources.append("Neo4j Hot Spots Analysis")
-                return "".join(response_parts), sources, 0.90
-
-        # File history
-        elif "file history" in message_lower or "history of" in message_lower:
-            # Extract filename from message
-            filename_match = re.search(r'[\w\-]+\.\w+', message)
-
-            if filename_match:
-                filename = filename_match.group(0)
-
-                response_parts.append(f"## 📜 File History: `{filename}`\n\n")
-
-                history = neo4j_service_enhanced.get_file_history(full_repo_name, filename)
-
-                if history:
-                    response_parts.append(f"**Total modifications:** {len(history)}\n\n")
-
-                    for i, change in enumerate(history[:10], 1):
-                        response_parts.append(
-                            f"{i}. **{change['commit_sha'][:7]}** - {change['message'][:50]}\n"
-                            f"   *by {change['author']} on {change['date'][:10]}*\n"
-                            f"   Changes: +{change.get('additions', 0)} -{change.get('deletions', 0)}\n\n"
+        # 4. Format
+        response, sources, confidence = format_result(result, entities, intent)
+        if response:
+            # ── HYBRID AUGMENTATION ──────────────────────────────────────────
+            # For hybrid intent, append a RAG-based functional description
+            # ("what does it do") if the analytics response lacks it.
+            # Triggered for file-specific hybrid strategies.
+            if intent == "hybrid" and strategy in (
+                "file_overview_rag", "file_recent_and_defines",
+                "file_importers_classes", "complexity",
+                "file_contributors", "file_functions_and_history"
+            ):
+                try:
+                    from ..services.rag_service import rag_service
+                    filename = entities.get("file") or ""
+                    # Build a focused "what does it do" sub-question
+                    if strategy == "complexity":
+                        top_file = (result.get("data", {}).get("files") or [{}])[0]
+                        top_name = top_file.get("path", "").split("/")[-1]
+                        rag_q = (
+                            f"What does the {top_name} module do? "
+                            "Explain its purpose, main responsibilities, and key functionality."
                         )
-
-                    if len(history) > 10:
-                        response_parts.append(f"*... and {len(history) - 10} more commits*\n")
-
-                    sources.append(f"File history for {filename}")
-                    return "".join(response_parts), sources, 0.90
-
-        # Code owners
-        elif "owner" in message_lower or "maintains" in message_lower:
-            # Extract filename
-            filename_match = re.search(r'[\w\-]+\.\w+', message)
-
-            if filename_match:
-                filename = filename_match.group(0)
-
-                response_parts.append(f"## 👤 Code Ownership: `{filename}`\n\n")
-
-                owners = neo4j_service_enhanced.get_code_owners(full_repo_name, filename)
-
-                if owners:
-                    primary = owners[0]
-                    response_parts.append(f"**Primary Maintainer:**\n")
-                    response_parts.append(f"- {primary['author']} ({primary['email']})\n")
-                    response_parts.append(f"- Commits: {primary['commits']}\n")
-                    response_parts.append(f"- Contribution: {primary['percentage']:.1f}%\n\n")
-
-                    if len(owners) > 1:
-                        response_parts.append(f"**Other Contributors:**\n")
-                        for owner in owners[1:5]:
-                            response_parts.append(
-                                f"- {owner['author']}: {owner['commits']} commits ({owner['percentage']:.1f}%)\n"
-                            )
-
-                    sources.append(f"Code ownership for {filename}")
-                    return "".join(response_parts), sources, 0.90
-
-        # Top contributors
-        elif "top contributor" in message_lower or "main contributor" in message_lower:
-            response_parts.append(f"## 👥 Top Contributors\n\n")
-
-            contributors = neo4j_service_enhanced.get_active_authors(full_repo_name, limit=10)
-
-            if contributors:
-                for i, contrib in enumerate(contributors, 1):
-                    response_parts.append(
-                        f"{i}. **{contrib['author']}**\n"
-                        f"   - Email: {contrib['email']}\n"
-                        f"   - Commits: {contrib['commits']}\n"
-                        f"   - Changes: +{contrib['additions']} -{contrib['deletions']}\n\n"
+                    else:
+                        rag_q = (
+                            f"What does {filename} do? "
+                            "Explain its purpose, main responsibilities, and key functionality."
+                        )
+                    rag_result = rag_service.query(
+                        repo_name=full_repo_name,
+                        question=rag_q,
+                        n_results=5,
+                        use_llm=True,
+                        use_graph=False,
+                        intent="semantic"
                     )
+                    rag_answer = rag_result.get("answer", "")
+                    rag_conf   = rag_result.get("confidence", 0.0)
+                    # Append only if RAG returned a meaningful answer
+                    if rag_answer and rag_conf > 0.2 and len(rag_answer) > 80:
+                        response = (
+                            response.rstrip()
+                            + "\n\n### 🔍 Functionality\n"
+                            + rag_answer.strip()
+                        )
+                        sources = list(dict.fromkeys(sources + rag_result.get("sources", [])))
+                        confidence = max(confidence, rag_conf)
+                except Exception as aug_err:
+                    logger.warning(f"Hybrid RAG augmentation failed (non-critical): {aug_err}")
+            # ── END HYBRID AUGMENTATION ──────────────────────────────────────
+            return response, sources, confidence
 
-                sources.append("Neo4j Contributor Analysis")
-                return "".join(response_parts), sources, 0.90
-
+        # 5. RAG fallback
         return None, [], 0.0
 
     except Exception as e:
         logger.error(f"Error generating analytics response: {e}")
         return None, [], 0.0
-
 
 def generate_llm_response(
         message: str,
@@ -808,40 +805,61 @@ async def generate_smart_response(
         message_lower = message.lower()
 
         # ========================================================================
-        # 🆕 PRIORITY 1: Check for commit/diff questions FIRST
+        # 🆕 PRIORITY 1: Semantic Intent Routing
         # ========================================================================
-        if is_commit_question(message_lower):
-            logger.info("Detected commit/diff question, using commit diff service...")
+        intent, intent_confidence = classify_intent(message)
+        logger.info(f"Intent classified: {intent} (confidence={intent_confidence:.3f})")
 
+        if intent in ("analytics", "hybrid", "structural", "metadata", "semantic"):
+            try:
+                analytics_response, analytics_sources, analytics_confidence = await asyncio.wait_for(
+                    generate_analytics_response(
+                        message=message,
+                        repository_url=repository_url,
+                        message_lower=message_lower,
+                        intent=intent
+                    ),
+                    timeout=240.0
+                )
+                if analytics_response:
+                    return analytics_response, analytics_sources, analytics_confidence, False, 0, True, "analytics"
+            except asyncio.TimeoutError:
+                logger.warning("Analytics pipeline timed out (15s), skipping to LLM fallback")
+
+        if intent == "commit":
             commit_response, commit_sources, commit_confidence = await generate_commit_diff_response(
                 message=message,
                 repository_url=repository_url,
                 message_lower=message_lower
             )
-
             if commit_response:
-                logger.info("Using commit diff response")
                 return commit_response, commit_sources, commit_confidence, False, 0, True, "commit_diff"
-
-        # ========================================================================
-        # 🆕 PRIORITY 2: Check for analytics questions
-        # ========================================================================
-        if is_analytics_question(message_lower):
-            logger.info("Detected analytics question, using Neo4j analytics...")
-
-            analytics_response, analytics_sources, analytics_confidence = await generate_analytics_response(
-                message=message,
-                repository_url=repository_url,
-                message_lower=message_lower
-            )
-
-            if analytics_response:
-                logger.info("Using analytics response")
-                return analytics_response, analytics_sources, analytics_confidence, False, 0, True, "analytics"
 
         # ========================================================================
         # PRIORITY 3: Try RAG for code-related questions
         # ========================================================================
+        # PRIORITY 3: Metadata/structural questions → RAG + Graph
+        metadata_keywords = [
+            "how many", "kaç", "number of", "count", "total",
+            "files", "dosya", "katkıda",
+            "size", "boyut", "lines", "satır", "classes", "functions",
+            "imports", "dependencies", "structure", "yapı", "list of",
+            "what files", "which files", "modules", "packages"
+        ]
+        if use_rag and any(kw in message_lower for kw in metadata_keywords) \
+                and intent not in ("analytics", "hybrid", "structural", "metadata", "semantic"):
+            logger.info("Detected metadata question, trying RAG + Graph...")
+            rag_response, rag_sources, rag_confidence, rag_success, chunks, graph_used, graph_context = await generate_rag_response(
+                message=message,
+                repository_url=repository_url,
+                repo_info=repo_info,
+                auto_index=auto_index,
+                use_graph=use_graph,
+                chat_history=chat_history
+            )
+            if rag_success and rag_response:
+                logger.info("Using RAG response for metadata question")
+                return rag_response, rag_sources, rag_confidence, True, chunks, graph_used, graph_context
         if use_rag and is_code_question(message_lower):
             logger.info("Detected code question, trying RAG...")
 

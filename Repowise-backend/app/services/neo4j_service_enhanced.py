@@ -604,9 +604,10 @@ class EnhancedNeo4jQueries:
              print(f"File created by: {creator}")
         """
         query = """
-        MATCH (r:Repository {name: $repo_name})-[:CONTAINS]->(c:Commit)-[:MODIFIES]->(f:File {path: $file_path})
-        RETURN c, f ORDER BY c.date DESC
-        """
+                MATCH (c:Commit {repository: $repo_name})-[:MODIFIED]->(f:File)
+                WHERE f.path CONTAINS $file_path
+                RETURN c, f ORDER BY c.date DESC
+                """
         with self.driver.session() as session:
             result = session.run(query, repo_name=repo_name, file_path=file_path)
             return [self._format_commit(r["c"]) for r in result]
@@ -641,16 +642,18 @@ class EnhancedNeo4jQueries:
              recent = [a for a in authors if a['last_modified'] > cutoff.isoformat()]
         """
         query = """
-        MATCH (r:Repository {name: $repo_name})-[:CONTAINS]->(c:Commit)-[:MODIFIES]->(f:File {path: $file_path}),
-              (d:Developer)-[:AUTHORED]->(c)
-        RETURN d.name as developer, d.email as email, count(c) as commits, max(c.date) as last_modified
-        ORDER BY commits DESC
-        """
+                MATCH (c:Commit {repository: $repo_name})-[:MODIFIED]->(f:File)
+                WHERE f.path CONTAINS $file_path
+                OPTIONAL MATCH (c)-[:COMMITTED_BY]->(a:Author)
+                WITH COALESCE(a.name, COALESCE(([(c)-[:COMMITTED_BY]->(a:Author) | a.name][0]), c.author_name, c.author, 'Unknown'), c.author, 'Unknown') AS developer,
+                     c, max(c.date) AS last_mod
+                RETURN developer, count(c) as commits, max(c.date) as last_modified
+                ORDER BY commits DESC
+                """
         with self.driver.session() as session:
             result = session.run(query, repo_name=repo_name, file_path=file_path)
             return [{
                 "developer": r["developer"],
-                "email": r["email"],
                 "commits": r["commits"],
                 "last_modified": r["last_modified"]
             } for r in result]
@@ -1115,10 +1118,10 @@ class EnhancedNeo4jQueries:
             This is an internal method not intended for direct use
         """
         return {
-            "sha": commit_node.get("sha"),
-            "message": commit_node.get("message"),
-            "author": commit_node.get("author"),
-            "date": commit_node.get("date"),
+            "commit_sha": commit_node.get("sha", ""),  # commit_sha değil sha
+            "message": commit_node.get("message", ""),
+            "author": commit_node.get("author_name", ""),
+            "date": commit_node.get("date", ""),
             "additions": commit_node.get("additions", 0),
             "deletions": commit_node.get("deletions", 0)
         }

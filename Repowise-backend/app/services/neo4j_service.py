@@ -230,20 +230,22 @@ class Neo4jService:
             with self._driver.session() as session:
                 # Create class node
                 query = """
-                MATCH (f:File {path: $file_path})
-                CREATE (c:Class {
-                    name: $class_name,
-                    file_path: $file_path,
-                    start_line: $start_line,
-                    end_line: $end_line,
-                    docstring: $docstring
-                })
-                CREATE (f)-[:DEFINES]->(c)
-                RETURN c
-                """
+                                MATCH (f:File {path: $file_path})
+                                CREATE (c:Class {
+                                    name: $class_name,
+                                    repository: $repo_name,
+                                    file_path: $file_path,
+                                    start_line: $start_line,
+                                    end_line: $end_line,
+                                    docstring: $docstring
+                                })
+                                CREATE (f)-[:DEFINES]->(c)
+                                RETURN c
+                                """
 
                 session.run(
                     query,
+                    repo_name=repo_name,
                     file_path=file_path,
                     class_name=class_name,
                     start_line=start_line,
@@ -255,16 +257,17 @@ class Neo4jService:
                 if base_classes:
                     for base_class in base_classes:
                         inherit_query = """
-                        MATCH (c:Class {name: $class_name, file_path: $file_path})
-                        MATCH (b:Class {name: $base_class})
-                        CREATE (c)-[:INHERITS_FROM]->(b)
-                        """
+                                        MATCH (c:Class {name: $class_name, file_path: $file_path, repository: $repo_name})
+                                        MATCH (b:Class {name: $base_class, repository: $repo_name})
+                                        MERGE (c)-[:INHERITS_FROM]->(b)
+                                        """
 
                         session.run(
                             inherit_query,
                             class_name=class_name,
                             file_path=file_path,
-                            base_class=base_class
+                            base_class=base_class,
+                            repo_name=repo_name
                         )
 
                 return True
@@ -309,22 +312,24 @@ class Neo4jService:
 
                 # Create function node - separate query without list in CREATE
                 query = """
-                MATCH (f:File {path: $file_path})
-                CREATE (fn:Function {
-                    name: $function_name,
-                    file_path: $file_path,
-                    start_line: $start_line,
-                    end_line: $end_line,
-                    return_type: $return_type,
-                    docstring: $docstring,
-                    param_count: $param_count
-                })
-                CREATE (f)-[:DEFINES]->(fn)
-                RETURN fn
-                """
+                                MATCH (f:File {path: $file_path})
+                                CREATE (fn:Function {
+                                    name: $function_name,
+                                    repository: $repo_name,
+                                    file_path: $file_path,
+                                    start_line: $start_line,
+                                    end_line: $end_line,
+                                    return_type: $return_type,
+                                    docstring: $docstring,
+                                    param_count: $param_count
+                                })
+                                CREATE (f)-[:DEFINES]->(fn)
+                                RETURN fn
+                                """
 
                 result = session.run(
                     query,
+                    repo_name=repo_name,
                     file_path=file_path,
                     function_name=function_name,
                     start_line=start_line,
@@ -588,16 +593,16 @@ class Neo4jService:
         try:
             with self._driver.session() as session:
                 query = """
-                MATCH (derived:Class {name: $derived_class, file_path: $file_path})
-                MATCH (base:Class {name: $base_class})
-                MERGE (derived)-[:INHERITS_FROM]->(base)
-                """
-
+                                MATCH (derived:Class {name: $derived_class, file_path: $file_path, repository: $repo_name})
+                                MATCH (base:Class {name: $base_class, repository: $repo_name})
+                                MERGE (derived)-[:INHERITS_FROM]->(base)
+                                """
                 session.run(
                     query,
                     derived_class=derived_class,
                     base_class=base_class,
-                    file_path=file_path
+                    file_path=file_path,
+                    repo_name=repo_name
                 )
 
                 return True
@@ -752,11 +757,11 @@ class Neo4jService:
         WITH split(f.path, '/')[0] as folder, count(DISTINCT c) as commits
         RETURN folder, commits
         ORDER BY commits DESC
-        LIMIT 20
+        LIMIT 100
         """
         return self.execute_query(query, {"repo_name": repo_name})
 
-    def get_largest_commits(self, repo_name: str, limit: int = 10):
+    def get_largest_commits(self, repo_name: str, limit: int = 25):
         """Get commits with most lines changed"""
         query = """
         MATCH (r:Repository {name: $repo_name})-[:CONTAINS]->(c:Commit)
@@ -828,6 +833,221 @@ class Neo4jService:
             "module": module
         })
 
+    def get_dependencies(self, repo_name: str) -> list:
+        """Get file dependencies from knowledge graph via IMPORTS relationships."""
+        try:
+            if not self._driver:
+                self.connect()
+            with self._driver.session() as session:
+                result = session.run("""
+                    MATCH (f:File {repository: $repo})-[:IMPORTS]->(dep)
+                    RETURN f.path AS file,
+                           collect(dep.name) AS dependencies,
+                           count(dep) AS dep_count
+                    ORDER BY dep_count DESC
+                    LIMIT 100
+                """, repo=repo_name)
+                return [{"file": r["file"], "dependencies": r["dependencies"], "dep_count": r["dep_count"]} for r in
+                        result]
+        except Exception as e:
+            logger.warning(f"get_dependencies error: {e}")
+            return []
+
+    def get_repository_overview(self, repo_name: str) -> dict:
+        """Get high-level repository stats from Neo4j graph."""
+        try:
+            if not self._driver:
+                self.connect()
+            with self._driver.session() as session:
+                result = session.run("""
+                                    MATCH (f:File {repository: $repo})
+                                    OPTIONAL MATCH (f)-[:DEFINES]->(c:Class)
+                                    OPTIONAL MATCH (f)-[:DEFINES]->(fn:Function)
+                                    RETURN count(DISTINCT f) AS file_count,
+                                           count(DISTINCT c) AS class_count,
+                                           count(DISTINCT fn) AS function_count
+                                """, repo=repo_name)
+                record = result.single()
+                if record:
+                    return {
+                        "file_count": record["file_count"],
+                        "class_count": record["class_count"],
+                        "function_count": record["function_count"],
+                        "repository": repo_name
+                    }
+                return {}
+        except Exception as e:
+            logger.warning(f"get_repository_overview error: {e}")
+            return {}
+
+    def get_class_hierarchy(self, repo_name: str) -> list:
+        """Get class inheritance hierarchy from Neo4j graph."""
+        try:
+            if not self._driver:
+                self.connect()
+            with self._driver.session() as session:
+                result = session.run("""
+                                    MATCH (c:Class {repository: $repo})
+                                    OPTIONAL MATCH (c)-[:INHERITS_FROM]->(parent:Class)
+                                    RETURN c.name AS class_name,
+                                           c.file_path AS file,
+                                           collect(parent.name) AS parents
+                                    ORDER BY c.name
+                                """, repo=repo_name)
+                return [{"class": r["class_name"], "file": r["file"], "parents": r["parents"]} for r in result]
+        except Exception as e:
+            logger.warning(f"get_class_hierarchy error: {e}")
+            return []
+
+    def get_repository_structure(self, repo_name: str) -> dict:
+        """Get repository file and code structure overview."""
+        try:
+            if not self._driver:
+                self.connect()
+            with self._driver.session() as session:
+                # File/class/function counts
+                result = session.run("""
+                    MATCH (f:File {repository: $repo})
+                    OPTIONAL MATCH (f)-[:CONTAINS]->(c:Class)
+                    OPTIONAL MATCH (f)-[:CONTAINS]->(fn:Function)
+                    RETURN count(DISTINCT f) AS files,
+                           count(DISTINCT c) AS classes,
+                           count(DISTINCT fn) AS functions,
+                           collect(DISTINCT f.path)[0..20] AS sample_files
+                """, repo=repo_name)
+                r = result.single()
+                data = {"files": r["files"], "classes": r["classes"],
+                        "functions": r["functions"], "sample_files": r["sample_files"]} if r else {}
+
+                # Total commit count
+                commit_result = session.run("""
+                    MATCH (c:Commit {repository: $repo})
+                    RETURN count(c) AS total_commits
+                """, repo=repo_name)
+                cr = commit_result.single()
+                data["total_commits"] = cr["total_commits"] if cr else 0
+
+                # Most modified files
+                modified_result = session.run("""
+                    MATCH (f:File)<-[:MODIFIED]-(c:Commit)
+                    WHERE f.repository = $repo
+                    RETURN f.path AS path, count(c) AS modifications
+                    ORDER BY modifications DESC
+                    LIMIT 25
+                """, repo=repo_name)
+                data["most_modified_files"] = [
+                    {"path": r["path"], "modifications": r["modifications"]}
+                    for r in modified_result
+                ]
+
+                return data
+        except Exception as e:
+            logger.warning(f"get_repository_structure error: {e}")
+            return {}
+
+    def get_commit_history(self, repo_name: str, limit: int = 100) -> list:
+        """Get commit history from Neo4j graph."""
+        try:
+            if not self._driver:
+                self.connect()
+            with self._driver.session() as session:
+                result = session.run("""
+                    MATCH (c:Commit {repository: $repo})
+                    OPTIONAL MATCH (c)-[:COMMITTED_BY]->(a:Author)
+                    RETURN c.sha AS sha, c.message AS message,
+                           COALESCE(a.name, c.author_name, c.author, 'Unknown') AS author,
+                           c.date AS date
+                    ORDER BY c.date DESC
+                    LIMIT $limit
+                """, repo=repo_name, limit=limit)
+                return [{"sha": r["sha"], "message": r["message"],
+                         "author": r["author"], "date": r["date"]} for r in result]
+        except Exception as e:
+            logger.warning(f"get_commit_history error: {e}")
+            return []
+
+    def get_file_contributors(self, repo_name: str, file_path: str, limit: int = 10) -> list:
+        """Get top contributors for a specific file using COMMITTED_BY relationship."""
+        try:
+            if not self._driver:
+                self.connect()
+            with self._driver.session() as session:
+                result = session.run("""
+                    MATCH (c:Commit)-[:MODIFIED]->(f:File)
+                    WHERE f.repository = $repo AND f.path CONTAINS $file_path
+                    OPTIONAL MATCH (c)-[:COMMITTED_BY]->(a:Author)
+                    WITH COALESCE(a.name, c.author_name, c.author, 'Unknown') AS author,
+                         count(c) AS commits
+                    RETURN author, commits
+                    ORDER BY commits DESC
+                    LIMIT $limit
+                """, repo=repo_name, file_path=file_path, limit=limit)
+                return [{"author": r["author"], "commits": r["commits"]} for r in result]
+        except Exception as e:
+            logger.warning(f"get_file_contributors error: {e}")
+            return []
+
+    def get_recently_modified_files(self, repo_name: str, n_commits: int = 20, limit: int = 15) -> list:
+        """Get files most frequently modified in the last N commits (HIST-008 fix)."""
+        try:
+            if not self._driver:
+                self.connect()
+            with self._driver.session() as session:
+                result = session.run("""
+                    MATCH (c:Commit {repository: $repo})
+                    WITH c ORDER BY c.date DESC LIMIT $n_commits
+                    MATCH (c)-[:MODIFIED]->(f:File)
+                    RETURN f.path AS path, count(c) AS modifications
+                    ORDER BY modifications DESC
+                    LIMIT $limit
+                """, repo=repo_name, n_commits=n_commits, limit=limit)
+                return [{"path": r["path"], "modifications": r["modifications"]} for r in result]
+        except Exception as e:
+            logger.warning(f"get_recently_modified_files error: {e}")
+            return []
+
+    def get_class_hierarchy_full(self, repo_name: str, class_name: str) -> dict:
+        """Get FULL transitive class hierarchy for a specific class (STR-007 fix)."""
+        try:
+            if not self._driver:
+                self.connect()
+            with self._driver.session() as session:
+                # Direct parents
+                parents_result = session.run("""
+                    MATCH (c:Class {repository: $repo, name: $class_name})
+                           -[:INHERITS_FROM]->(parent:Class)
+                    RETURN DISTINCT parent.name AS parent
+                """, repo=repo_name, class_name=class_name)
+                parents = [r["parent"] for r in parents_result]
+
+                # Full transitive chain
+                chain_result = session.run("""
+                    MATCH path = (c:Class {repository: $repo, name: $class_name})
+                                  -[:INHERITS_FROM*1..5]->(ancestor:Class)
+                    RETURN DISTINCT ancestor.name AS ancestor,
+                           length(path) AS depth
+                    ORDER BY depth ASC
+                """, repo=repo_name, class_name=class_name)
+                chain = [r["ancestor"] for r in chain_result]
+
+                # Subclasses
+                children_result = session.run("""
+                    MATCH (child:Class {repository: $repo})
+                           -[:INHERITS_FROM]->(c:Class {name: $class_name})
+                    RETURN DISTINCT child.name AS child
+                """, repo=repo_name, class_name=class_name)
+                children = [r["child"] for r in children_result]
+
+                return {
+                    "class": class_name,
+                    "direct_parents": parents,
+                    "full_chain": chain,
+                    "subclasses": children
+                }
+        except Exception as e:
+            logger.warning(f"get_class_hierarchy_full error: {e}")
+            return {}
+
 # Singleton instance
 neo4j_service = Neo4jService(
     uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
@@ -837,3 +1057,4 @@ neo4j_service = Neo4jService(
 
 # Connect on module import
 neo4j_service.connect()
+

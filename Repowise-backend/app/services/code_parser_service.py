@@ -342,10 +342,10 @@ class CodeParserService:
         return functions
 
     def _extract_imports(
-        self,
-        node: Node,
-        file_path: str,
-        code: str
+            self,
+            node: Node,
+            file_path: str,
+            code: str
     ) -> List[ImportEntity]:
         """Extract import statements"""
         imports = []
@@ -380,7 +380,19 @@ class CodeParserService:
 
                 # Module name
                 module_node = from_node.child_by_field_name('module_name')
-                module = code[module_node.start_byte:module_node.end_byte] if module_node else "Unknown"
+                if module_node:
+                    module = code[module_node.start_byte:module_node.end_byte]
+                    # Eğer module sadece dot(lar)dan ibaretse relative import — regex ile düzelt
+                    if module.replace('.', '') == '':
+                        import re
+                        full_text = code[from_node.start_byte:from_node.end_byte]
+                        m = re.match(r'from\s*(\.+)\s*import\s+(\w+)', full_text)
+                        module = (m.group(1) + m.group(2)) if m else module
+                else:
+                    import re
+                    full_text = code[from_node.start_byte:from_node.end_byte]
+                    m = re.match(r'from\s*(\.+)\s*import\s+(\w+)', full_text)
+                    module = (m.group(1) + m.group(2)) if m else "unknown"
 
                 # Imported names
                 names = []
