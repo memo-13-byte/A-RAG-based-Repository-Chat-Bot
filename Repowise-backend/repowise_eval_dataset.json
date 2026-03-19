@@ -1,0 +1,630 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2026-02-27",
+    "description": "RepoWise Evaluation Dataset - 60 repository-level Q&A questions",
+    "repos": [
+      "psf/requests",
+      "pallets/flask"
+    ],
+    "categories": {
+      "METADATA": "Statistics, file counts, contributor counts, language breakdown",
+      "SEMANTIC": "Implementation details, how code works, function/class explanations",
+      "STRUCTURAL": "Dependencies, class hierarchies, imports, code relationships",
+      "HISTORICAL": "Commit history, contributors, who changed what, when",
+      "HYBRID": "Questions requiring both vector and graph retrieval"
+    },
+    "routing_legend": {
+      "GRAPH": "Expected to route to Neo4j knowledge graph",
+      "VECTOR": "Expected to route to ChromaDB vector search",
+      "HYBRID": "Expected to use both retrieval mechanisms"
+    },
+    "difficulty_legend": {
+      "EASY": "Single-hop, direct lookup",
+      "MEDIUM": "Multi-hop or requires context synthesis",
+      "HARD": "Cross-file reasoning or ambiguous intent"
+    }
+  },
+  "questions": [
+    {
+      "id": "META-001",
+      "repo": "psf/requests",
+      "category": "METADATA",
+      "question": "How many files are in the requests repository?",
+      "expected_routing": "GRAPH",
+      "difficulty": "EASY",
+      "ground_truth_hint": "Should return a specific file count from the repository",
+      "evaluation_criteria": "Answer must include a specific number; vague answers are INCORRECT"
+    },
+    {
+      "id": "META-002",
+      "repo": "psf/requests",
+      "category": "METADATA",
+      "question": "Who are the top 5 contributors to the requests library?",
+      "expected_routing": "GRAPH",
+      "difficulty": "EASY",
+      "ground_truth_hint": "Should list contributor names with commit counts",
+      "evaluation_criteria": "Must list at least 3 named contributors; generic answers are PARTIAL"
+    },
+    {
+      "id": "META-003",
+      "repo": "psf/requests",
+      "category": "METADATA",
+      "question": "What programming languages are used in the requests repository?",
+      "expected_routing": "GRAPH",
+      "difficulty": "EASY",
+      "ground_truth_hint": "Primarily Python, with some configuration/documentation files",
+      "evaluation_criteria": "Must mention Python as primary; bonus for RST, YAML, etc."
+    },
+    {
+      "id": "META-004",
+      "repo": "psf/requests",
+      "category": "METADATA",
+      "question": "How many total commits does the requests repository have?",
+      "expected_routing": "GRAPH",
+      "difficulty": "EASY",
+      "ground_truth_hint": "Should return a specific commit count",
+      "evaluation_criteria": "Must provide a number; answer should be consistent with GitHub data"
+    },
+    {
+      "id": "META-005",
+      "repo": "psf/requests",
+      "category": "METADATA",
+      "question": "Which files have been modified the most in the requests repository?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "sessions.py, models.py, adapters.py are typically hot spots",
+      "evaluation_criteria": "Must list specific file names; vague answers are INCORRECT"
+    },
+    {
+      "id": "META-006",
+      "repo": "pallets/flask",
+      "category": "METADATA",
+      "question": "How many Python files are in the Flask repository?",
+      "expected_routing": "GRAPH",
+      "difficulty": "EASY",
+      "ground_truth_hint": "Should return a specific count of .py files",
+      "evaluation_criteria": "Must include a specific number"
+    },
+    {
+      "id": "META-007",
+      "repo": "pallets/flask",
+      "category": "METADATA",
+      "question": "Who has made the most contributions to the Flask project?",
+      "expected_routing": "GRAPH",
+      "difficulty": "EASY",
+      "ground_truth_hint": "Should name the top contributor with commit count",
+      "evaluation_criteria": "Must name at least one specific contributor"
+    },
+    {
+      "id": "META-008",
+      "repo": "pallets/flask",
+      "category": "METADATA",
+      "question": "What is the total number of lines added and deleted in the last 50 commits of Flask?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Should return addition and deletion counts",
+      "evaluation_criteria": "Must provide two numbers (additions and deletions)"
+    },
+    {
+      "id": "META-009",
+      "repo": "psf/requests",
+      "category": "METADATA",
+      "question": "How many classes are defined in the requests library?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Should count all class definitions across files",
+      "evaluation_criteria": "Must provide a specific number; acceptable range is Â±5"
+    },
+    {
+      "id": "META-010",
+      "repo": "pallets/flask",
+      "category": "METADATA",
+      "question": "What are the hot spot files in the Flask repository (most frequently modified)?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "app.py, helpers.py are typically frequently modified",
+      "evaluation_criteria": "Must list specific file names with modification counts"
+    },
+    {
+      "id": "SEM-001",
+      "repo": "psf/requests",
+      "category": "SEMANTIC",
+      "question": "How does the Session class handle cookies?",
+      "expected_routing": "VECTOR",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Session uses RequestsCookieJar, merges cookies per request",
+      "evaluation_criteria": "Must explain the cookie merging/persistence mechanism; generic HTTP answers are PARTIAL"
+    },
+    {
+      "id": "SEM-002",
+      "repo": "psf/requests",
+      "category": "SEMANTIC",
+      "question": "What does the PreparedRequest class do in the requests library?",
+      "expected_routing": "VECTOR",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "PreparedRequest is a mutable prepared version of a Request, ready to be sent",
+      "evaluation_criteria": "Must explain the preparation/serialization role; must mention it's separate from Request"
+    },
+    {
+      "id": "SEM-003",
+      "repo": "psf/requests",
+      "category": "SEMANTIC",
+      "question": "How does retry logic work in the requests library?",
+      "expected_routing": "VECTOR",
+      "difficulty": "HARD",
+      "ground_truth_hint": "Uses HTTPAdapter with Retry from urllib3, configurable max_retries",
+      "evaluation_criteria": "Must mention HTTPAdapter and/or urllib3 Retry; must explain how to configure it"
+    },
+    {
+      "id": "SEM-004",
+      "repo": "psf/requests",
+      "category": "SEMANTIC",
+      "question": "Explain how authentication works in the requests library.",
+      "expected_routing": "VECTOR",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Auth classes implement __call__, Session applies auth to PreparedRequest",
+      "evaluation_criteria": "Must mention at least one auth method (BasicAuth, BearerToken, etc.)"
+    },
+    {
+      "id": "SEM-005",
+      "repo": "psf/requests",
+      "category": "SEMANTIC",
+      "question": "What is the purpose of the hooks system in requests?",
+      "expected_routing": "VECTOR",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Hooks allow event-driven callbacks, e.g., response hook dispatched after each response",
+      "evaluation_criteria": "Must explain event-driven/callback nature; must give a concrete example"
+    },
+    {
+      "id": "SEM-006",
+      "repo": "pallets/flask",
+      "category": "SEMANTIC",
+      "question": "How does Flask's application context work?",
+      "expected_routing": "VECTOR",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "AppContext pushed/popped, provides g and current_app proxies",
+      "evaluation_criteria": "Must explain context stack; must mention current_app or g"
+    },
+    {
+      "id": "SEM-007",
+      "repo": "pallets/flask",
+      "category": "SEMANTIC",
+      "question": "What is the difference between before_request and before_first_request in Flask?",
+      "expected_routing": "VECTOR",
+      "difficulty": "EASY",
+      "ground_truth_hint": "before_request runs before every request, before_first_request only before the first",
+      "evaluation_criteria": "Must clearly distinguish between the two decorators"
+    },
+    {
+      "id": "SEM-008",
+      "repo": "pallets/flask",
+      "category": "SEMANTIC",
+      "question": "How does Flask handle error handling and custom error pages?",
+      "expected_routing": "VECTOR",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "errorhandler decorator registers handlers for HTTP error codes",
+      "evaluation_criteria": "Must mention errorhandler decorator; example of 404/500 handling is CORRECT"
+    },
+    {
+      "id": "SEM-009",
+      "repo": "pallets/flask",
+      "category": "SEMANTIC",
+      "question": "Explain how Blueprints work in Flask.",
+      "expected_routing": "VECTOR",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Blueprints allow modular app structure, registered on app with url_prefix",
+      "evaluation_criteria": "Must explain modular routing; must mention registration on app"
+    },
+    {
+      "id": "SEM-010",
+      "repo": "psf/requests",
+      "category": "SEMANTIC",
+      "question": "How does streaming work in the requests library?",
+      "expected_routing": "VECTOR",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "stream=True parameter, iter_content() and iter_lines() methods",
+      "evaluation_criteria": "Must mention stream=True; must mention iter_content or iter_lines"
+    },
+    {
+      "id": "SEM-011",
+      "repo": "pallets/flask",
+      "category": "SEMANTIC",
+      "question": "What is Flask's request context and how is it different from the application context?",
+      "expected_routing": "VECTOR",
+      "difficulty": "HARD",
+      "ground_truth_hint": "RequestContext has request and session proxies; AppContext has current_app and g",
+      "evaluation_criteria": "Must distinguish both contexts clearly with their respective proxies"
+    },
+    {
+      "id": "SEM-012",
+      "repo": "psf/requests",
+      "category": "SEMANTIC",
+      "question": "How does the requests library handle SSL/TLS certificate verification?",
+      "expected_routing": "VECTOR",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "verify parameter accepts True/False or path to CA bundle",
+      "evaluation_criteria": "Must mention verify parameter; must explain True/False/path options"
+    },
+    {
+      "id": "SEM-013",
+      "repo": "pallets/flask",
+      "category": "SEMANTIC",
+      "question": "How does Flask's url_for function work?",
+      "expected_routing": "VECTOR",
+      "difficulty": "EASY",
+      "ground_truth_hint": "url_for generates URLs from endpoint names (reverse URL building). Takes endpoint name as first arg, accepts _anchor, _method, _scheme, _external params. Requires active request or app context. Raises BuildError if endpoint not found.",
+      "evaluation_criteria": "Must explain reverse URL building from endpoint name"
+    },
+    {
+      "id": "SEM-014",
+      "repo": "psf/requests",
+      "category": "SEMANTIC",
+      "question": "What is the role of the adapters in the requests architecture?",
+      "expected_routing": "VECTOR",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "HTTPAdapter handles connection pooling via urllib3, mounted on Session",
+      "evaluation_criteria": "Must mention HTTPAdapter and connection pooling"
+    },
+    {
+      "id": "SEM-015",
+      "repo": "pallets/flask",
+      "category": "SEMANTIC",
+      "question": "How does Flask's test client work?",
+      "expected_routing": "VECTOR",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "app.test_client() creates a FlaskClient with full request simulation",
+      "evaluation_criteria": "Must mention test_client(); must explain request simulation"
+    },
+    {
+      "id": "STR-001",
+      "repo": "psf/requests",
+      "category": "STRUCTURAL",
+      "question": "What files depend on sessions.py in the requests library?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "api.py, __init__.py import from sessions.py",
+      "evaluation_criteria": "Must list specific files; must not list files that don't import from sessions.py"
+    },
+    {
+      "id": "STR-002",
+      "repo": "psf/requests",
+      "category": "STRUCTURAL",
+      "question": "What classes does models.py define in the requests library?",
+      "expected_routing": "GRAPH",
+      "difficulty": "EASY",
+      "ground_truth_hint": "Response, Request, PreparedRequest, and others",
+      "evaluation_criteria": "Must list specific class names from models.py"
+    },
+    {
+      "id": "STR-003",
+      "repo": "psf/requests",
+      "category": "STRUCTURAL",
+      "question": "What external libraries does the requests library import?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "urllib3, chardet/charset_normalizer, certifi, idna are key dependencies",
+      "evaluation_criteria": "Must list at least 3 specific external libraries"
+    },
+    {
+      "id": "STR-004",
+      "repo": "psf/requests",
+      "category": "STRUCTURAL",
+      "question": "How is the requests library structured? Give me an overview of its modules.",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "api.py, sessions.py, models.py, adapters.py, auth.py, exceptions.py, utils.py",
+      "evaluation_criteria": "Must mention at least 5 core modules with brief descriptions"
+    },
+    {
+      "id": "STR-005",
+      "repo": "pallets/flask",
+      "category": "STRUCTURAL",
+      "question": "What files import from flask/app.py?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Files importing from app.py include: blueprints.py, cli.py, testing.py, sessions.py, sansio/blueprints.py",
+      "evaluation_criteria": "Must list specific files; vague answers are INCORRECT"
+    },
+    {
+      "id": "STR-006",
+      "repo": "pallets/flask",
+      "category": "STRUCTURAL",
+      "question": "What functions are defined in flask/helpers.py?",
+      "expected_routing": "GRAPH",
+      "difficulty": "EASY",
+      "ground_truth_hint": "url_for, flash, get_flashed_messages, send_file, send_from_directory",
+      "evaluation_criteria": "Must list specific function names from helpers.py"
+    },
+    {
+      "id": "STR-007",
+      "repo": "pallets/flask",
+      "category": "STRUCTURAL",
+      "question": "What is the class hierarchy in the Flask application object?",
+      "expected_routing": "GRAPH",
+      "difficulty": "HARD",
+      "ground_truth_hint": "Flask inherits from Scaffold; Blueprint also inherits from Scaffold",
+      "evaluation_criteria": "Must mention the inheritance chain correctly"
+    },
+    {
+      "id": "STR-008",
+      "repo": "psf/requests",
+      "category": "STRUCTURAL",
+      "question": "What functions are exported from the requests package's __init__.py?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "get, post, put, delete, head, options, patch, request, Session are exported",
+      "evaluation_criteria": "Must list the main HTTP method functions"
+    },
+    {
+      "id": "STR-009",
+      "repo": "psf/requests",
+      "category": "STRUCTURAL",
+      "question": "What does auth.py define and what does it depend on?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Defines AuthBase, HTTPBasicAuth, HTTPDigestAuth; depends on models and utils",
+      "evaluation_criteria": "Must identify both the classes defined and the dependencies"
+    },
+    {
+      "id": "STR-010",
+      "repo": "pallets/flask",
+      "category": "STRUCTURAL",
+      "question": "How are the Flask modules organized and what does each one do?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "app.py (Flask class), blueprints.py, ctx.py, globals.py, helpers.py, routing.py",
+      "evaluation_criteria": "Must mention at least 4 modules with correct descriptions"
+    },
+    {
+      "id": "STR-011",
+      "repo": "psf/requests",
+      "category": "STRUCTURAL",
+      "question": "What exceptions are defined in the requests library and in which file?",
+      "expected_routing": "GRAPH",
+      "difficulty": "EASY",
+      "ground_truth_hint": "exceptions.py defines RequestException, ConnectionError, Timeout, HTTPError etc.",
+      "evaluation_criteria": "Must name the file and at least 3 specific exception classes"
+    },
+    {
+      "id": "STR-012",
+      "repo": "pallets/flask",
+      "category": "STRUCTURAL",
+      "question": "What does ctx.py define and what does it import?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "ctx.py defines AppContext and _AppCtxGlobals (classes); RequestContext was deprecated in Flask 3.2 and merged into AppContext. Also defines functions: after_this_request, copy_current_request_context, has_app_context, has_request_context",
+      "evaluation_criteria": "Must correctly identify AppContext and _AppCtxGlobals as the main classes defined. RequestContext is deprecated/removed - should NOT be required. Mentioning at least 2 functions like has_app_context, has_request_context is a bonus."
+    },
+    {
+      "id": "HIST-001",
+      "repo": "psf/requests",
+      "category": "HISTORICAL",
+      "question": "Who last modified sessions.py in the requests library?",
+      "expected_routing": "GRAPH",
+      "difficulty": "EASY",
+      "ground_truth_hint": "m0d3v last modified sessions.py on 2026-02-13",
+      "evaluation_criteria": "Must name a specific contributor; must be consistent with actual git history"
+    },
+    {
+      "id": "HIST-002",
+      "repo": "psf/requests",
+      "category": "HISTORICAL",
+      "question": "What changes were made to the requests library in its most recent commits?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Should summarize recent commit messages and changed files",
+      "evaluation_criteria": "Must reference specific files or changes; generic answers are PARTIAL"
+    },
+    {
+      "id": "HIST-003",
+      "repo": "psf/requests",
+      "category": "HISTORICAL",
+      "question": "Which contributor has made the most changes to models.py?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Nate Prewitt has made the most changes to models.py (19 commits), followed by Kenneth Reitz (8 commits)",
+      "evaluation_criteria": "Must name a specific contributor"
+    },
+    {
+      "id": "HIST-004",
+      "repo": "psf/requests",
+      "category": "HISTORICAL",
+      "question": "How has the requests library evolved over its recent commits? What major changes were made?",
+      "expected_routing": "GRAPH",
+      "difficulty": "HARD",
+      "ground_truth_hint": "Should synthesize commit messages to identify major feature/fix trends",
+      "evaluation_criteria": "Must reference actual commit messages or file changes; speculation is INCORRECT"
+    },
+    {
+      "id": "HIST-005",
+      "repo": "pallets/flask",
+      "category": "HISTORICAL",
+      "question": "Who are the top contributors to the Flask project and how many commits do they have?",
+      "expected_routing": "GRAPH",
+      "difficulty": "EASY",
+      "ground_truth_hint": "Should list contributors with commit counts",
+      "evaluation_criteria": "Must list at least 3 contributors with commit counts"
+    },
+    {
+      "id": "HIST-006",
+      "repo": "pallets/flask",
+      "category": "HISTORICAL",
+      "question": "What files were changed in the most recent commits to the Flask repository?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Most recent Flask commits changed: helpers.py, ctx.py, app.py, CHANGES.rst, docs files",
+      "evaluation_criteria": "Must list specific file names; generic answers are INCORRECT"
+    },
+    {
+      "id": "HIST-007",
+      "repo": "psf/requests",
+      "category": "HISTORICAL",
+      "question": "What commit added SSL verification support to the requests library?",
+      "expected_routing": "GRAPH",
+      "difficulty": "HARD",
+      "ground_truth_hint": "Should reference specific commit or acknowledge limitation if not in indexed history",
+      "evaluation_criteria": "Honest 'not found in indexed data' is CORRECT; hallucination is INCORRECT"
+    },
+    {
+      "id": "HIST-008",
+      "repo": "pallets/flask",
+      "category": "HISTORICAL",
+      "question": "Which files have been most actively modified in the last 20 commits to Flask?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Should return files sorted by modification frequency in recent commits",
+      "evaluation_criteria": "Must list specific files with counts"
+    },
+    {
+      "id": "HIST-009",
+      "repo": "psf/requests",
+      "category": "HISTORICAL",
+      "question": "Show me the commit history for utils.py in the requests library.",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Recent commits: 4791422 by Nate Prewitt, f8bec2f by Nate Prewitt, 5b4b64c by Arthur Woimbee",
+      "evaluation_criteria": "Must list specific commits; must include author names or messages"
+    },
+    {
+      "id": "HIST-010",
+      "repo": "pallets/flask",
+      "category": "HISTORICAL",
+      "question": "What percentage of commits to Flask were made by the top contributor?",
+      "expected_routing": "GRAPH",
+      "difficulty": "HARD",
+      "ground_truth_hint": "Should calculate percentage based on indexed commit data",
+      "evaluation_criteria": "Must provide a calculated percentage; must name the contributor"
+    },
+    {
+      "id": "HIST-011",
+      "repo": "psf/requests",
+      "category": "HISTORICAL",
+      "question": "What changes were made to exceptions.py over time in the requests library?",
+      "expected_routing": "GRAPH",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "exceptions.py history: f8bec2f by Nate Prewitt (Fix CI), 3ff3ff2 by Thomas Dehghani (Fix JSONDecodeError), d63e94f by Nate Prewitt (Move to src)",
+      "evaluation_criteria": "Must reference actual commits; fabricated history is INCORRECT"
+    },
+    {
+      "id": "HIST-012",
+      "repo": "pallets/flask",
+      "category": "HISTORICAL",
+      "question": "Who contributed the most code (lines added) to the Flask project?",
+      "expected_routing": "GRAPH",
+      "difficulty": "HARD",
+      "ground_truth_hint": "Should calculate based on additions in tracked commits",
+      "evaluation_criteria": "Must name specific contributor; must reference line counts"
+    },
+    {
+      "id": "HYB-001",
+      "repo": "psf/requests",
+      "category": "HYBRID",
+      "question": "Who wrote the Session class and how does it work?",
+      "expected_routing": "HYBRID",
+      "difficulty": "HARD",
+      "ground_truth_hint": "Should combine: who authored sessions.py (graph) + how Session works (vector)",
+      "evaluation_criteria": "Must answer BOTH parts: author/contributor AND functional explanation"
+    },
+    {
+      "id": "HYB-002",
+      "repo": "psf/requests",
+      "category": "HYBRID",
+      "question": "Which files depend on models.py and what are the key classes in it?",
+      "expected_routing": "HYBRID",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Dependencies (graph) + class explanations (vector)",
+      "evaluation_criteria": "Must list dependent files AND explain at least 2 classes"
+    },
+    {
+      "id": "HYB-003",
+      "repo": "pallets/flask",
+      "category": "HYBRID",
+      "question": "What recently changed in app.py and what does the Flask class do?",
+      "expected_routing": "HYBRID",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Recent commits to app.py (graph) + Flask class explanation (vector)",
+      "evaluation_criteria": "Must include both recent change info AND functional description"
+    },
+    {
+      "id": "HYB-004",
+      "repo": "psf/requests",
+      "category": "HYBRID",
+      "question": "Give me a complete overview of adapters.py: its structure, what it does, and who maintains it.",
+      "expected_routing": "HYBRID",
+      "difficulty": "HARD",
+      "ground_truth_hint": "Structure/classes (graph) + functionality (vector) + contributor history (graph)",
+      "evaluation_criteria": "Must cover all three aspects: structure, functionality, and contribution info"
+    },
+    {
+      "id": "HYB-005",
+      "repo": "pallets/flask",
+      "category": "HYBRID",
+      "question": "Which contributor most recently modified the routing logic in Flask and how does that routing work?",
+      "expected_routing": "HYBRID",
+      "difficulty": "HARD",
+      "ground_truth_hint": "Recent commits to routing.py (graph) + routing mechanism explanation (vector)",
+      "evaluation_criteria": "Must name a contributor AND explain the routing mechanism"
+    },
+    {
+      "id": "HYB-006",
+      "repo": "psf/requests",
+      "category": "HYBRID",
+      "question": "What is the most complex file in the requests library and what does it do?",
+      "expected_routing": "HYBRID",
+      "difficulty": "HARD",
+      "ground_truth_hint": "Complexity can be measured by class/function count (graph) + explanation (vector)",
+      "evaluation_criteria": "Must justify 'most complex' with some metric AND explain what it does"
+    },
+    {
+      "id": "EDGE-001",
+      "repo": "psf/requests",
+      "category": "SEMANTIC",
+      "question": "What happens when you send a request to an invalid URL in the requests library?",
+      "expected_routing": "VECTOR",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "MissingSchema or InvalidSchema exception raised",
+      "evaluation_criteria": "Must mention specific exception classes; generic 'error' answers are PARTIAL"
+    },
+    {
+      "id": "EDGE-002",
+      "repo": "pallets/flask",
+      "category": "SEMANTIC",
+      "question": "How does Flask handle circular imports?",
+      "expected_routing": "VECTOR",
+      "difficulty": "HARD",
+      "ground_truth_hint": "Flask uses lazy imports and proxy objects (LocalProxy) to avoid circular imports",
+      "evaluation_criteria": "Must mention LocalProxy or lazy loading pattern"
+    },
+    {
+      "id": "EDGE-003",
+      "repo": "psf/requests",
+      "category": "STRUCTURAL",
+      "question": "Does the requests library have any circular import dependencies?",
+      "expected_routing": "GRAPH",
+      "difficulty": "HARD",
+      "ground_truth_hint": "Should analyze import graph for cycles",
+      "evaluation_criteria": "Honest analysis is CORRECT; confident wrong answer is INCORRECT"
+    },
+    {
+      "id": "EDGE-004",
+      "repo": "pallets/flask",
+      "category": "HYBRID",
+      "question": "How many functions are in helpers.py, when was it last modified, and who modified it?",
+      "expected_routing": "HYBRID",
+      "difficulty": "MEDIUM",
+      "ground_truth_hint": "Function count (graph) + last commit info (graph)",
+      "evaluation_criteria": "Must provide function count AND commit/author info"
+    },
+    {
+      "id": "EDGE-005",
+      "repo": "pallets/flask",
+      "category": "HYBRID",
+      "question": "What functions are defined in flask/globals.py, when was it last changed, and why do they use LocalProxy?",
+      "expected_routing": "HYBRID",
+      "difficulty": "HARD",
+      "ground_truth_hint": "globals.py defines current_app, request, session, g as LocalProxy objects; last commit from graph",
+      "evaluation_criteria": "Must name the proxy objects AND explain why LocalProxy is used (thread safety / context isolation)"
+    }
+  ]
+}

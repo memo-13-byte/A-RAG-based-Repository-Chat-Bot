@@ -1,0 +1,154 @@
+{
+  "metadata": [
+    {
+      "q": "How many Python files are in the requests repository?",
+      "hint": "Should provide a specific file count (e.g. 53 Python files)",
+      "graph": {
+        "label": "Incorrect",
+        "resp": "The repository contains **460 files** (287 Python files).\n"
+      },
+      "vector": {
+        "label": "Partial",
+        "resp": "Based on the provided code context, the number of Python files can be inferred from the snippets given, but not explicitly counted. However, the context includes partial content from several Python files, such as:\n\n1. `compat.py` located in `src/requests/`\n2. `api.py` located in `src/requests/`\n3. `"
+      }
+    },
+    {
+      "q": "Who are the top 3 contributors to the requests library by commit count?",
+      "hint": "Top contributors: Nate Prewitt, Kenneth Reitz with commit counts",
+      "graph": {
+        "label": "Partial",
+        "resp": "## \ud83d\udc65 Top Contributors\n\n1. **@kennethreitz**: 1,006 commits (42.5%)\n2. **@Lukasa**: 610 commits (25.7%)\n3. **@sigmavirus24**: 395 commits (16.7%)\n4. **@nateprewitt**: 313 commits (13.2%)\n5. **@slingamn**: 45 commits (1.9%)\n"
+      },
+      "vector": {
+        "label": "Correct",
+        "resp": "The retrieved code context does not provide specific information about the top contributors to the Requests library by commit count. The context includes references to some contributors, such as Kenneth Reitz, who is mentioned multiple times as the author in various files (`src/requests/__init__.py`"
+      }
+    },
+    {
+      "q": "How many total commits does the requests repository have?",
+      "hint": "Should provide a specific number (around 6000+ commits)",
+      "graph": {
+        "label": "Correct",
+        "resp": "The repository contains **6,411 commits**.\n"
+      },
+      "vector": {
+        "label": "Correct",
+        "resp": "The code context provided does not contain any specific information or code examples related to the total number of commits in the requests repository. There are no references to commit counts or related implementation details within the retrieved snippets. Therefore, based solely on the provided co"
+      }
+    }
+  ],
+  "semantic": [
+    {
+      "q": "How does the Session class persist cookies across requests?",
+      "hint": "Session uses RequestsCookieJar; cookies are merged per-request from session and request-level cookies",
+      "graph": {
+        "label": "Incorrect",
+        "resp": "[GRAPH-ONLY: pipeline returned no answer for this query type]"
+      },
+      "vector": {
+        "label": "Partial",
+        "resp": "Based on the code context provided, the `Session` class in the `requests` library persists cookies across requests using a `RequestsCookieJar`. Below are the relevant details and code patterns:\n\n1. **Initialization of Cookies**:\n   - The `Session` class, as seen in the `__attrs__` list from the code"
+      }
+    },
+    {
+      "q": "How does retry logic work in the requests library?",
+      "hint": "HTTPAdapter uses urllib3 Retry object; max_retries on mount; backoff_factor",
+      "graph": {
+        "label": "Incorrect",
+        "resp": "[GRAPH-ONLY: pipeline returned no answer for this query type]"
+      },
+      "vector": {
+        "label": "Partial",
+        "resp": "Based on the provided code context, the retry logic in the `requests` library is primarily managed through the `HTTPAdapter` class found in `src/requests/adapters.py`. The `HTTPAdapter` class implements a transport adapter interface for `requests` sessions, which allows it to handle HTTP and HTTPS U"
+      }
+    },
+    {
+      "q": "How does Flask handle circular imports using LocalProxy?",
+      "hint": "Flask uses werkzeug.local.LocalProxy with ContextVar for current_app, request, session, g",
+      "graph": {
+        "label": "Incorrect",
+        "resp": "[GRAPH-ONLY: pipeline returned no answer for this query type]"
+      },
+      "vector": {
+        "label": "Partial",
+        "resp": "Based on the code context provided from the Flask repository, Flask utilizes the `LocalProxy` class from `werkzeug.local` to handle circular imports. This is evident in the implementation of several proxies for global objects like `app_ctx`, `current_app`, `g`, `request`, and `session`.\n\nHere are th"
+      }
+    }
+  ],
+  "structural": [
+    {
+      "q": "What classes does models.py define in the requests library?",
+      "hint": "PreparedRequest, Request, Response, RequestEncodingMixin, RequestHooksMixin",
+      "graph": {
+        "label": "Correct",
+        "resp": "## \ud83d\udd27 Definitions in `models.py`\n\n- `Class: PreparedRequest`\n- `Class: Request`\n- `Class: RequestEncodingMixin`\n- `Class: RequestHooksMixin`\n- `Class: Response`\n"
+      },
+      "vector": {
+        "label": "Partial",
+        "resp": "Based strictly on the code context provided, the `models.py` file in the requests library defines the `Response` class. \n\nThe `Response` class is described in the following excerpt from the context:\n\n```python\nclass Response:\n    \"\"\"The :class:`Response <Response>` object, which contains a\n    serve"
+      }
+    },
+    {
+      "q": "What files import from sessions.py in the requests library?",
+      "hint": "Files importing sessions: api.py, adapters.py, __init__.py",
+      "graph": {
+        "label": "Partial",
+        "resp": "## \ud83d\udce6 Files importing `sessions.py`\n\n- `src/requests/__init__.py`\n- `src/requests/api.py`\n"
+      },
+      "vector": {
+        "label": "Partial",
+        "resp": "Based strictly on the code context provided above, the file `src/requests/api.py` imports from `sessions.py` in the requests library. This is evident from the line in `src/requests/api.py`:\n\n```python\nfrom . import sessions\n```\n\nThis line indicates that the `api.py` module imports the `sessions` mod"
+      }
+    },
+    {
+      "q": "What is the class hierarchy in the Flask application object?",
+      "hint": "Flask inherits from App which inherits from Scaffold; Blueprint also inherits from Scaffold",
+      "graph": {
+        "label": "Incorrect",
+        "resp": "## \ud83c\udfdb\ufe0f Class Hierarchy\n\n**Classes that inherit from `Scaffold` (directly or transitively):**\n- `App` inherits from `Scaffold`\n- `Blueprint` inherits from `Scaffold`\n- `Flask` inherits from `Scaffold` (via `App`)\n\n**Full class hierarchy:**\n- `Flask` \u2192 `App` \u2192 `Scaffold`\n- `FlaskGroup` \u2192 inherits from "
+      },
+      "vector": {
+        "label": "Partial",
+        "resp": "Based strictly on the code context provided, the class hierarchy in the Flask application object is as follows:\n\n1. **Scaffold**: This is the base class, although its implementation details are not shown in the provided context. It is likely a foundational class for building application scaffolding."
+      }
+    }
+  ],
+  "historical": [
+    {
+      "q": "Who last modified sessions.py in the requests library and what did they change?",
+      "hint": "Nate Prewitt made the most recent modification with a CI/build related commit",
+      "graph": {
+        "label": "Partial",
+        "resp": "## \ud83d\udcdc File History: `sessions.py`\n\n**Last modified by:** m0d3v on 2026-02-13\n\n**Total modifications:** 585\n\n**Recent changes:**\n1. **5f33844** - Update docstring for Session.verify to include string suppor\n   *by m0d3v on 2026-02-13*\n\n2. **f8bec2f** - Fix CI and build failures (#7190)\n   *by Nate Pre"
+      },
+      "vector": {
+        "label": "Correct",
+        "resp": "The provided code context does not include specific information about who last modified the `sessions.py` file in the Requests library or the exact changes they made. The context includes some functions and classes like `session()` and `Session`, but it does not contain any commit history, author in"
+      }
+    },
+    {
+      "q": "What are the most recently modified files in the Flask repository?",
+      "hint": "Recent commits modified app.py, ctx.py, uv.lock and related files",
+      "graph": {
+        "label": "Partial",
+        "resp": "## \ud83d\udcdd Recently Changed Files\n\n**4cae5d8** \u2014 Merge branch 'stable' *(2026-03-08)*\n- `uv.lock`\n- `.pre-commit-config.yaml`\n- `.github/workflows/zizmor.yaml`\n- `.github/workflows/tests.yaml`\n- `.github/workflows/publish.yaml`\n\n**a197702** \u2014 update dev dependencies *(2026-03-08)*\n\n**4774385** \u2014 add zizmo"
+      },
+      "vector": {
+        "label": "Partial",
+        "resp": "Based on the code context provided, there are no specific file paths or commit timestamps that indicate the most recently modified files in the Flask repository. The context focuses on various parts of the Flask codebase, such as the `blueprints.py`, `app.py`, `cli.py`, `sansio/app.py`, and `json/__"
+      }
+    },
+    {
+      "q": "Which contributor has made the most commits to the Flask repository?",
+      "hint": "davidism (@davidism) has made the most commits to the Flask repository",
+      "graph": {
+        "label": "Correct",
+        "resp": "## \ud83d\udc65 Top Contributors\n\n1. **@davidism**: 1,824 commits (51.9%)\n2. **@mitsuhiko**: 1,189 commits (33.8%)\n3. **@untitaker**: 274 commits (7.8%)\n4. **@rduplain**: 122 commits (3.5%)\n5. **@greyli**: 105 commits (3.0%)\n"
+      },
+      "vector": {
+        "label": "Incorrect",
+        "resp": "The code context provided does not contain any specific information regarding contributors or commit history to the Flask repository. The context mainly includes snippets of code related to Flask's setup, usage, and configuration files, as well as some portions of the `cli.py`, `blueprints.py`, and "
+      }
+    }
+  ]
+}

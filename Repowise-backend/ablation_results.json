@@ -1,0 +1,421 @@
+{
+  "results": [
+    {
+      "id": "META-001",
+      "category": "METADATA",
+      "question": "How many files are in the requests repository?",
+      "vector_only": {
+        "response": "The repository contains **460 files** (287 Python files).\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "The repository contains **460 files** (287 Python files).\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "The repository contains **460 files** (287 Python files).\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "META-002",
+      "category": "METADATA",
+      "question": "Who are the top 5 contributors to the requests library?",
+      "vector_only": {
+        "response": "## \ud83d\udc65 Top Contributors\n\n1. **@kennethreitz**: 1,006 commits (42.5%)\n2. **@Lukasa**: 610 commits (25.7%)\n3. **@sigmavirus24**: 395 commits (16.7%)\n4. **@nateprewitt**: 313 commits (13.2%)\n5. **@slingamn**: 45 commits (1.9%)\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "## \ud83d\udc65 Top Contributors\n\n1. **@kennethreitz**: 1,006 commits (42.5%)\n2. **@Lukasa**: 610 commits (25.7%)\n3. **@sigmavirus24**: 395 commits (16.7%)\n4. **@nateprewitt**: 313 commits (13.2%)\n5. **@slingamn**: 45 commits (1.9%)\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "## \ud83d\udc65 Top Contributors\n\n1. **@kennethreitz**: 1,006 commits (42.5%)\n2. **@Lukasa**: 610 commits (25.7%)\n3. **@sigmavirus24**: 395 commits (16.7%)\n4. **@nateprewitt**: 313 commits (13.2%)\n5. **@slingamn**: 45 commits (1.9%)\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "META-003",
+      "category": "METADATA",
+      "question": "What programming languages are used in the requests repository?",
+      "vector_only": {
+        "response": "Based on the code context provided, the primary programming language used in the requests repository is Python. This is evident from the Python-specific import statements, function definitions, and module docstring patterns found in the code snippets.\n\nFor example, in the file `src/requests/api.py`, the module docstring indicates the structure typical of Python files:\n\n```python\n\"\"\"\nrequests.api\n~~~~~~~~~~~~\n\nThis module implements the Requests API.\n\"\"\"\n```\n\nAdditionally, the import statements i",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "In the **psf/requests** repository, the programming languages used are:\n\n- **Python**: This is the primary language used in the repository, accounting for **99.3%** of the codebase. Python is the main language for developing the features and functionalities of the Requests library.\n\n- **Makefile**: This language makes up **0.7%** of the repository. Makefiles are typically used for automating tasks such as building and managing dependencies.\n\nOverall, the Requests library is predominantly a Pytho",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "Based on the code context provided, the programming language used in the `requests` repository is Python. This is evident from several indicators in the snippets:\n\n1. **Python-specific import statements and syntax**: \n    - In `src/requests/models.py`, there are import statements like `import datetime`, `from io import UnsupportedOperation`, and `from urllib3.exceptions import DecodeError`. These follow Python's syntax for importing modules and classes.\n    - The file `src/requests/api.py` start",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "META-004",
+      "category": "METADATA",
+      "question": "How many total commits does the requests repository have?",
+      "vector_only": {
+        "response": "The repository contains **6,411 commits**.\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "The repository contains **6,411 commits**.\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "The repository contains **6,411 commits**.\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "SEM-001",
+      "category": "SEMANTIC",
+      "question": "How does the Session class handle cookies?",
+      "vector_only": {
+        "response": "The `Session` class in the provided context handles cookies through several mechanisms:\n\n1. **Cookie Persistence and Configuration**: The `Session` class is described as providing cookie persistence, connection-pooling, and configuration. This is part of its basic functionality to manage HTTP requests (Source 3).\n\n2. **Attributes**: The `Session` class has an attribute called `cookies`, among others like `headers`, `auth`, and `proxies` (Source 3).\n\n3. **Preparing Requests with Cookies**: When p",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "The **Session** class in the **Requests** library is designed to handle cookies in a streamlined and efficient manner. Here\u2019s how it manages cookies:\n\n- **Persistent Sessions**: When you use a `Session` object, it maintains a persistent set of cookies across multiple requests. This means if you make multiple requests to a server, the `Session` will automatically keep track of cookies set by the server and send them back in subsequent requests.\n\n- **Cookie Handling**: The `Session` object handles",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "Based on the provided code context, the `Session` class in the `requests` library handles cookies through the integration of `RequestsCookieJar` and methods like `prepare_request`.\n\n1. **Cookie Persistence and Initialization**:\n   - The `Session` class, as indicated in its docstring, provides cookie persistence among other features.\n   - When a request is prepared using the `prepare_request` method, cookies are initially extracted from the `request.cookies` attribute. If these cookies are not al",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "SEM-002",
+      "category": "SEMANTIC",
+      "question": "What does the PreparedRequest class do in the requests library?",
+      "vector_only": {
+        "response": "Based on the provided code context, the `PreparedRequest` class in the requests library is a fully mutable object that contains the exact bytes to be sent to the server. Instances of `PreparedRequest` are generated from a `Request` object, and it is advised not to instantiate `PreparedRequest` manually, as this might lead to undesirable effects.\n\nThe `PreparedRequest` class is used in conjunction with a `Request` object. Here is an example from the context illustrating its usage:\n\n```python\nimpo",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "The **PreparedRequest** class in the **requests** library is an advanced feature that allows users to construct and manipulate HTTP requests more precisely before they are sent. Here\u2019s a comprehensive explanation based on the context of the **psf/requests** repository:\n\n### Purpose of PreparedRequest\n\n- **Request Preparation**: The **PreparedRequest** class is used to build a request so that it can be sent with full control over the request components. This includes the URL, headers, body, and a",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "The `PreparedRequest` class in the requests library is designed to be a fully mutable object that contains the exact bytes that are to be sent to the server. It is generated from a `Request` object and is not intended to be instantiated manually, as doing so might lead to undesirable effects.\n\n### Usage Example\nHere's how an instance of `PreparedRequest` is utilized based on the provided context:\n\n```python\nimport requests\nreq = requests.Request('GET', 'https://httpbin.org/get')\nr = req.prepare(",
+        "label": "Partial",
+        "notes": "majority 2/3"
+      }
+    },
+    {
+      "id": "SEM-003",
+      "category": "SEMANTIC",
+      "question": "How does retry logic work in the requests library?",
+      "vector_only": {
+        "response": "The **Requests** library itself, according to the given repository information, does not inherently provide built-in retry logic. However, retry functionality can be implemented using additional components or libraries in conjunction with Requests. Here\u2019s how you can approach retry logic using the Requests library:\n\n### Implementing Retry Logic with Requests\n\nWhile Requests is a widely-used Python library for making HTTP requests due to its simplicity and elegance, it does not natively support a",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "The **Requests** library itself does not directly implement retry logic as part of its core functionality. However, it is designed to work seamlessly with other libraries or custom implementations that can provide retry capabilities. Here\u2019s how you can implement retry logic in conjunction with Requests:\n\n### Implementing Retry Logic\n\n1. **Using `urllib3` with Requests**:\n   - The Requests library is built on top of `urllib3`, which does support retry functionality. You can leverage `urllib3`\u2019s `",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "The **Requests** library itself does not directly implement retry logic as part of its core functionality. Instead, retry logic is typically implemented using additional libraries or custom code. Here's how you can handle retries when using the Requests library:\n\n### Using Additional Libraries\n\n- **urllib3**: The `requests` library is built on top of `urllib3`, which includes retry functionality. You can use `urllib3` with `requests` to implement retry logic. This involves creating a `Retry` obj",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "SEM-004",
+      "category": "SEMANTIC",
+      "question": "Explain how authentication works in the requests library.",
+      "vector_only": {
+        "response": "**Authentication in the Requests Library**\n\nThe **Requests** library is a popular Python package used to send HTTP/1.1 requests with ease. One of its features is handling authentication, which is often necessary when making requests to secure endpoints.\n\n### How Authentication Works\n\n- **Basic Authentication**: \n  The Requests library supports basic authentication directly by using the `auth` parameter in the request method. This is done by passing a tuple containing the username and password.\n\n",
+        "label": "Correct",
+        "notes": "majority 2/3"
+      },
+      "graph_only": {
+        "response": "**Authentication in the Requests Library**\n\nThe Requests library, a popular and widely used HTTP library for Python, simplifies the process of making HTTP requests and handling responses. One of its key features is handling authentication seamlessly.\n\n### How Authentication Works:\n\n1. **Basic Authentication:**\n   - The Requests library supports Basic Authentication, which is one of the simplest forms of authentication.\n   - To use Basic Authentication, you pass a tuple containing the username an",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "**Authentication in the Requests Library**\n\nThe Requests library in Python simplifies making HTTP requests and handling responses. One of its key features is handling authentication seamlessly. Here's how authentication works in the Requests library:\n\n### Basic Authentication\n\nRequests can handle HTTP Basic Authentication by using the `auth` parameter in the request methods such as `get`, `post`, etc.\n\n**Example Usage:**\n\n```python\nimport requests\n\n# Sending a GET request with basic authenticati",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "STR-001",
+      "category": "STRUCTURAL",
+      "question": "What files depend on sessions.py in the requests library?",
+      "vector_only": {
+        "response": "## \ud83d\udce6 Files importing `sessions.py`\n\n- `src/requests/__init__.py`\n- `src/requests/api.py`\n",
+        "label": "Partial",
+        "notes": "majority 2/3"
+      },
+      "graph_only": {
+        "response": "## \ud83d\udce6 Files importing `sessions.py`\n\n- `src/requests/__init__.py`\n- `src/requests/api.py`\n",
+        "label": "Partial",
+        "notes": "majority 2/3"
+      },
+      "hybrid": {
+        "response": "## \ud83d\udce6 Files importing `sessions.py`\n\n- `src/requests/__init__.py`\n- `src/requests/api.py`\n",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "STR-002",
+      "category": "STRUCTURAL",
+      "question": "What classes does models.py define in the requests library?",
+      "vector_only": {
+        "response": "## \ud83d\udd27 Definitions in `models.py`\n\n- `Class: PreparedRequest`\n- `Class: Request`\n- `Class: RequestEncodingMixin`\n- `Class: RequestHooksMixin`\n- `Class: Response`\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "## \ud83d\udd27 Definitions in `models.py`\n\n- `Class: PreparedRequest`\n- `Class: Request`\n- `Class: RequestEncodingMixin`\n- `Class: RequestHooksMixin`\n- `Class: Response`\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "## \ud83d\udd27 Definitions in `models.py`\n\n- `Class: PreparedRequest`\n- `Class: Request`\n- `Class: RequestEncodingMixin`\n- `Class: RequestHooksMixin`\n- `Class: Response`\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "STR-003",
+      "category": "STRUCTURAL",
+      "question": "What external libraries does the requests library import?",
+      "vector_only": {
+        "response": "## \ud83d\udce6 External Libraries\n\n- `OpenSSL`\n- `chardet`\n- `charset_normalizer`\n- `cryptography`\n- `docutils`\n- `idna`\n- `packaging`\n- `pallets_sphinx_themes`\n- `pygments`\n- `rtifi i`\n- `setuptools`\n- `simplejson`\n- `urllib3`\n- `winreg`\n- `zipfile`\n",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "## \ud83d\udce6 External Libraries\n\n- `OpenSSL`\n- `chardet`\n- `charset_normalizer`\n- `cryptography`\n- `docutils`\n- `idna`\n- `packaging`\n- `pallets_sphinx_themes`\n- `pygments`\n- `rtifi i`\n- `setuptools`\n- `simplejson`\n- `urllib3`\n- `winreg`\n- `zipfile`\n",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "## \ud83d\udce6 External Libraries\n\n- `OpenSSL`\n- `chardet`\n- `charset_normalizer`\n- `cryptography`\n- `docutils`\n- `idna`\n- `packaging`\n- `pallets_sphinx_themes`\n- `pygments`\n- `rtifi i`\n- `setuptools`\n- `simplejson`\n- `urllib3`\n- `winreg`\n- `zipfile`\n",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "STR-004",
+      "category": "STRUCTURAL",
+      "question": "How is the requests library structured? Give me an overview of its modules.",
+      "vector_only": {
+        "response": "## \ud83d\udcc1 Module Overview\n\n**`utils.py`** \u2014 38 definitions\n  - Functions: `parse_header_links`, `rewind_body`, `urldefragauth`\n\n**`exceptions.py`** \u2014 25 definitions\n  - Classes: `RequestsDependencyWarning`, `FileModeWarning`, `RequestsWarning`\n\n**`cookies.py`** \u2014 12 definitions\n  - Classes: `RequestsCookieJar`, `CookieConflictError`, `MockResponse`\n  - Functions: `merge_cookies`, `cookiejar_from_dict`, `morsel_to_cookie`\n\n**`api.py`** \u2014 8 definitions\n  - Functions: `delete`, `patch`, `put`\n\n**`sessio",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "## \ud83d\udcc1 Module Overview\n\n**`utils.py`** \u2014 38 definitions\n  - Functions: `parse_header_links`, `rewind_body`, `urldefragauth`\n\n**`exceptions.py`** \u2014 25 definitions\n  - Classes: `RequestsDependencyWarning`, `FileModeWarning`, `RequestsWarning`\n\n**`cookies.py`** \u2014 12 definitions\n  - Classes: `RequestsCookieJar`, `CookieConflictError`, `MockResponse`\n  - Functions: `merge_cookies`, `cookiejar_from_dict`, `morsel_to_cookie`\n\n**`api.py`** \u2014 8 definitions\n  - Functions: `delete`, `patch`, `put`\n\n**`sessio",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "## \ud83d\udcc1 Module Overview\n\n**`utils.py`** \u2014 38 definitions\n  - Functions: `parse_header_links`, `rewind_body`, `urldefragauth`\n\n**`exceptions.py`** \u2014 25 definitions\n  - Classes: `RequestsDependencyWarning`, `FileModeWarning`, `RequestsWarning`\n\n**`cookies.py`** \u2014 12 definitions\n  - Classes: `RequestsCookieJar`, `CookieConflictError`, `MockResponse`\n  - Functions: `merge_cookies`, `cookiejar_from_dict`, `morsel_to_cookie`\n\n**`api.py`** \u2014 8 definitions\n  - Functions: `delete`, `patch`, `put`\n\n**`sessio",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "HIST-001",
+      "category": "HISTORICAL",
+      "question": "Who last modified sessions.py in the requests library?",
+      "vector_only": {
+        "response": "## \ud83d\udcdc File History: `sessions.py`\n\n**Last modified by:** m0d3v on 2026-02-13\n\n**Total modifications:** 585\n\n**Recent changes:**\n1. **5f33844** - Update docstring for Session.verify to include string suppor\n   *by m0d3v on 2026-02-13*\n\n2. **f8bec2f** - Fix CI and build failures (#7190)\n   *by Nate Prewitt on 2026-01-30*\n\n3. **d58d8aa** - docs: clarify timeout parameter uses seconds in Session.requ\n   *by Quaylyn Rimer on 2025-07-18*\n\n4. **d63e94f** - Move to src directory (#6506)\n   *by Nate Prewi",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "## \ud83d\udcdc File History: `sessions.py`\n\n**Last modified by:** m0d3v on 2026-02-13\n\n**Total modifications:** 585\n\n**Recent changes:**\n1. **5f33844** - Update docstring for Session.verify to include string suppor\n   *by m0d3v on 2026-02-13*\n\n2. **f8bec2f** - Fix CI and build failures (#7190)\n   *by Nate Prewitt on 2026-01-30*\n\n3. **d58d8aa** - docs: clarify timeout parameter uses seconds in Session.requ\n   *by Quaylyn Rimer on 2025-07-18*\n\n4. **d63e94f** - Move to src directory (#6506)\n   *by Nate Prewi",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "## \ud83d\udcdc File History: `sessions.py`\n\n**Last modified by:** m0d3v on 2026-02-13\n\n**Total modifications:** 585\n\n**Recent changes:**\n1. **5f33844** - Update docstring for Session.verify to include string suppor\n   *by m0d3v on 2026-02-13*\n\n2. **f8bec2f** - Fix CI and build failures (#7190)\n   *by Nate Prewitt on 2026-01-30*\n\n3. **d58d8aa** - docs: clarify timeout parameter uses seconds in Session.requ\n   *by Quaylyn Rimer on 2025-07-18*\n\n4. **d63e94f** - Move to src directory (#6506)\n   *by Nate Prewi",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "HIST-002",
+      "category": "HISTORICAL",
+      "question": "What changes were made to the requests library in its most recent commits?",
+      "vector_only": {
+        "response": "Based on the recent commit history of the **psf/requests** repository, here are the changes made in the most recent commits:\n\n1. **Documentation Updates:**\n   - **Commit `0e4ae38`:** \n     - **Change:** Excluded `Response.is_permanent_redirect` from API documentation.\n     - **Contributor:** Dr Alex Mitre\n     - **Date:** 2026-03-05\n     - **Details:** This change focuses on refining the API documentation by removing references to a specific method, likely to improve clarity or because it's not ",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "Based on the recent commits to the **psf/requests** repository, the following changes were made:\n\n1. **Documentation Updates:**\n   - **Commit `0e4ae38`:** \n     - Excluded `Response.is_permanent_redirect` from the API documentation.\n     - Contributor: Dr Alex Mitre\n     - Date: 2026-03-05\n   - **Commit `d568f47`:**\n     - Clarified the Quickstart POST example in the documentation.\n     - Contributor: Ethan Price\n     - Date: 2026-03-03\n\n2. **Dependency Updates:**\n   - **Commit `b2a1d33`:**\n    ",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "Based on the recent commits to the **psf/requests** repository, here are the changes made to the Requests library:\n\n1. **Documentation Updates:**\n   - **Commit `0e4ae38`:**  \n     - **Change:** Excluded `Response.is_permanent_redirect` from the API documentation.\n     - **Contributor:** Dr Alex Mitre\n     - **Date:** 2026-03-05\n     - **Purpose:** Likely to refine the documentation by removing outdated or less relevant information.\n\n   - **Commit `d568f47`:**  \n     - **Change:** Clarified the Q",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "HIST-003",
+      "category": "HISTORICAL",
+      "question": "Which contributor has made the most changes to models.py?",
+      "vector_only": {
+        "response": "## \ud83d\udc64 Top Contributors: `models.py`\n\n1. **Armin Ronacher**: 1123 commits\n",
+        "label": "Incorrect",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "## \ud83d\udc64 Top Contributors: `models.py`\n\n1. **Armin Ronacher**: 1123 commits\n",
+        "label": "Incorrect",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "## \ud83d\udc64 Top Contributors: `models.py`\n\n1. **Armin Ronacher**: 1123 commits\n",
+        "label": "Incorrect",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "HIST-004",
+      "category": "HISTORICAL",
+      "question": "How has the requests library evolved over its recent commits?",
+      "vector_only": {
+        "response": "The recent commits to the **Requests** library demonstrate a mix of documentation improvements and dependency updates. Here is a breakdown of the recent changes:\n\n1. **Documentation Updates:**\n   - **Commit 0e4ae38 (2026-03-05):** \n     - **Description:** Excluded `Response.is_permanent_redirect` from API documentation.\n     - **Contributor:** Dr Alex Mitre.\n     - **Impact:** This change likely aims to refine the available API documentation to improve clarity and reduce confusion for developers",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "The **Requests** library has evolved over its recent commits with several updates focused on documentation, dependencies, and functionality improvements. Here\u2019s a breakdown of the recent changes:\n\n1. **Documentation Updates:**\n   - The commit `0e4ae38` by Dr. Alex Mitre on 2026-03-05 updated the documentation to exclude `Response.is_permanent_redirect` from the API docs. This suggests a refinement in the documentation to ensure clarity and accuracy.\n   - The commit `d568f47` by Ethan Price on 20",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "The **Requests** library has seen several recent updates and improvements based on its latest commits. Here's a summary of how it has evolved:\n\n### Recent Commits Overview\n\n1. **Documentation Updates:**\n   - **Commit `0e4ae38`**: The `Response.is_permanent_redirect` was excluded from the API documentation. This suggests a focus on refining and possibly simplifying the documentation to ensure clarity and relevance.\n   - **Commit `d568f47`**: The Quickstart POST example was clarified, indicating a",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "HYB-001",
+      "category": "HYBRID",
+      "question": "Who wrote the Session class and how does it work?",
+      "vector_only": {
+        "response": "Based strictly on the provided code context, the author of the `Session` class is not explicitly mentioned. However, the `requests.api` module includes a copyright notice that attributes the code to Kenneth Reitz: \n\n```python\n:copyright: (c) 2012 by Kenneth Reitz.\n```\n\nAs for how the `Session` class works, it is defined in the `requests.sessions` module. The `Session` class inherits from `SessionRedirectMixin` and is designed to manage and persist settings across requests, such as cookies, authe",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "### Who Wrote the Session Class?\n\nThe **Session** class in the `psf/requests` repository was likely contributed to by several developers over time, but specific authorship of individual classes is not detailed in the provided repository information. However, based on the list of top contributors, it is reasonable to infer that major contributors such as **@kennethreitz**, **@Lukasa**, **@sigmavirus24**, and **@nateprewitt** have likely played significant roles in its development, given their ext",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "The code context provided does not specify the individual author of the `Session` class. However, it does mention that the `requests.api` module, which implements the Requests API, is copyrighted by Kenneth Reitz in 2012, suggesting his involvement in the development of the Requests library.\n\nThe `Session` class is defined in the `src/requests/sessions.py` file and inherits from `SessionRedirectMixin`. It provides features such as cookie persistence, connection-pooling, and configuration managem",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "HYB-002",
+      "category": "HYBRID",
+      "question": "Which files depend on models.py and what are the key classes in it?",
+      "vector_only": {
+        "response": "## \ud83d\udce6 `models.py` \u2014 Dependencies & Key Classes\n\n**Key classes defined:**\n- `PreparedRequest`\n- `Request`\n- `RequestEncodingMixin`\n- `RequestHooksMixin`\n- `Response`\n\n**Files that import/depend on it:**\n- `src/requests/__init__.py`\n- `src/requests/adapters.py`\n- `src/requests/sessions.py`\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "## \ud83d\udce6 `models.py` \u2014 Dependencies & Key Classes\n\n**Key classes defined:**\n- `PreparedRequest`\n- `Request`\n- `RequestEncodingMixin`\n- `RequestHooksMixin`\n- `Response`\n\n**Files that import/depend on it:**\n- `src/requests/__init__.py`\n- `src/requests/adapters.py`\n- `src/requests/sessions.py`\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "## \ud83d\udce6 `models.py` \u2014 Dependencies & Key Classes\n\n**Key classes defined:**\n- `PreparedRequest`\n- `Request`\n- `RequestEncodingMixin`\n- `RequestHooksMixin`\n- `Response`\n\n**Files that import/depend on it:**\n- `src/requests/__init__.py`\n- `src/requests/adapters.py`\n- `src/requests/sessions.py`\n",
+        "label": "Correct",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "HYB-003",
+      "category": "HYBRID",
+      "question": "What recently changed in app.py and what does the Flask class do?",
+      "vector_only": {
+        "response": "## \ud83d\udccb `app.py` \u2014 Recent Changes & Structure\n\n**Last modified:** 2026-02-20 by David Lord\n**Last commit:** all teardown callbacks are called despite errors (#5928)\n\n**Recent commits:**\n- `c34d6e8` all teardown callbacks are called despite errors ( *(2026-02-20)*\n- `fbb6f0b` all teardown callbacks are called despite errors *(2026-02-20)*\n- `7b00886` fix typing *(2026-02-19)*\n\n**Classes defined:**\n- `App`\n- `Flask`\n\n**Class hierarchy:**\n- `Flask` \u2192 inherits from `App`\n- `Flask` \u2192 inherits from `App`",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "## \ud83d\udccb `app.py` \u2014 Recent Changes & Structure\n\n**Last modified:** 2026-02-20 by David Lord\n**Last commit:** all teardown callbacks are called despite errors (#5928)\n\n**Recent commits:**\n- `c34d6e8` all teardown callbacks are called despite errors ( *(2026-02-20)*\n- `fbb6f0b` all teardown callbacks are called despite errors *(2026-02-20)*\n- `7b00886` fix typing *(2026-02-19)*\n\n**Classes defined:**\n- `App`\n- `Flask`\n\n**Class hierarchy:**\n- `Flask` \u2192 inherits from `App`\n- `Flask` \u2192 inherits from `App`",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "## \ud83d\udccb `app.py` \u2014 Recent Changes & Structure\n\n**Last modified:** 2026-02-20 by David Lord\n**Last commit:** all teardown callbacks are called despite errors (#5928)\n\n**Recent commits:**\n- `c34d6e8` all teardown callbacks are called despite errors ( *(2026-02-20)*\n- `fbb6f0b` all teardown callbacks are called despite errors *(2026-02-20)*\n- `7b00886` fix typing *(2026-02-19)*\n\n**Classes defined:**\n- `App`\n- `Flask`\n\n**Class hierarchy:**\n- `Flask` \u2192 inherits from `App`\n- `Flask` \u2192 inherits from `App`",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      }
+    },
+    {
+      "id": "HYB-004",
+      "category": "HYBRID",
+      "question": "Give me a complete overview of adapters.py: its structure, what it does, and who contributes to it.",
+      "vector_only": {
+        "response": "## \ud83d\udccb `adapters.py` Analysis\n\n**Last modified:** 2026-01-30 by Nate Prewitt \u2014 _Fix CI and build failures (#7190)_\n\n**Defines:**\n- `Class: BaseAdapter`\n- `Class: HTTPAdapter`\n- `Function: _urllib3_request_context`\n\n**Imports:**\n- `.auth`\n- `.compat`\n- `.cookies`\n- `.exceptions`\n- `.models`\n- `.structures`\n- `.utils`\n- `os.path`\n- `requests.adapters`\n- `socket`\n- `typing`\n- `urllib3.contrib.socks`\n",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "graph_only": {
+        "response": "## \ud83d\udccb `adapters.py` Analysis\n\n**Last modified:** 2026-01-30 by Nate Prewitt \u2014 _Fix CI and build failures (#7190)_\n\n**Defines:**\n- `Class: BaseAdapter`\n- `Class: HTTPAdapter`\n- `Function: _urllib3_request_context`\n\n**Imports:**\n- `.auth`\n- `.compat`\n- `.cookies`\n- `.exceptions`\n- `.models`\n- `.structures`\n- `.utils`\n- `os.path`\n- `requests.adapters`\n- `socket`\n- `typing`\n- `urllib3.contrib.socks`\n",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      },
+      "hybrid": {
+        "response": "## \ud83d\udccb `adapters.py` Analysis\n\n**Last modified:** 2026-01-30 by Nate Prewitt \u2014 _Fix CI and build failures (#7190)_\n\n**Defines:**\n- `Class: BaseAdapter`\n- `Class: HTTPAdapter`\n- `Function: _urllib3_request_context`\n\n**Imports:**\n- `.auth`\n- `.compat`\n- `.cookies`\n- `.exceptions`\n- `.models`\n- `.structures`\n- `.utils`\n- `os.path`\n- `requests.adapters`\n- `socket`\n- `typing`\n- `urllib3.contrib.socks`\n",
+        "label": "Partial",
+        "notes": "majority 3/3"
+      }
+    }
+  ],
+  "totals": {
+    "vector_only": {
+      "C": 10,
+      "P": 9,
+      "I": 1
+    },
+    "graph_only": {
+      "C": 9,
+      "P": 10,
+      "I": 1
+    },
+    "hybrid": {
+      "C": 8,
+      "P": 11,
+      "I": 1
+    }
+  }
+}
