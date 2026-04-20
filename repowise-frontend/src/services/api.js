@@ -12,7 +12,7 @@ import axios from 'axios';
 // Local dev: Create .env.local file with:
 //   VITE_API_BASE_URL=http://127.0.0.1:8000
 // ============================================================================
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // Log current API URL (for debugging)
 console.log(`[RepoWise API] Backend URL: ${API_BASE_URL}`);
