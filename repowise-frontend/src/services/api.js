@@ -1,7 +1,21 @@
 import axios from 'axios';
 
-// Backend API base URL
-const API_BASE_URL = 'http://127.0.0.1:8000';
+// ============================================================================
+// Backend API base URL (PRODUCTION PATCH)
+// ============================================================================
+// Reads from VITE_API_BASE_URL environment variable
+// Falls back to localhost for local development
+//
+// Vercel: Add VITE_API_BASE_URL in project settings → Environment Variables
+//   Example: https://repowise-api.duckdns.org
+//
+// Local dev: Create .env.local file with:
+//   VITE_API_BASE_URL=http://127.0.0.1:8000
+// ============================================================================
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+
+// Log current API URL (for debugging)
+console.log(`[RepoWise API] Backend URL: ${API_BASE_URL}`);
 
 // Axios instance
 const api = axios.create({
@@ -179,7 +193,7 @@ export const ragAPI = {
 };
 
 // ============================================================================
-// AUTOFIX API (AutoCodeRover Integration) - NEW!
+// AUTOFIX API (AutoCodeRover Integration)
 // ============================================================================
 export const autofixAPI = {
   /**
