@@ -88,7 +88,7 @@ export default function AutoFix({ selectedRepository }) {
     try {
       // Try to fetch the patch content
       // The patch_path is like: /outputs/task_id/task_id_timestamp/selected_patch.json
-      const response = await axios.get(`http://127.0.0.1:8001${statusData.patch_path}`);
+      const response = await axios.get(statusData.patch_path);
       setPatchContent(response.data);
     } catch (error) {
       console.error('Error fetching patch:', error);
@@ -108,7 +108,7 @@ export default function AutoFix({ selectedRepository }) {
 
     // Create download link
     const link = document.createElement('a');
-    link.href = `http://127.0.0.1:8001${statusData.patch_path}`;
+    link.href = statusData.patch_path;
     link.download = `patch_${currentTaskId}.json`;
     document.body.appendChild(link);
     link.click();
