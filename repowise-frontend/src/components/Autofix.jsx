@@ -1,15 +1,332 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { toast } from 'sonner';
 import { autofixAPI } from '../services/api';
-import { Loader2, CheckCircle, XCircle, Clock, Sparkles, AlertCircle, X, Copy, Download } from 'lucide-react';
-import axios from 'axios';
+import { useThemeStore } from '../stores/theme-store';
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
+import { Badge } from './ui/badge';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
+import { ScrollArea } from './ui/scroll-area';
+import { Skeleton } from './ui/skeleton';
+import {
+  Sparkles,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Check,
+  Download,
+  X,
+  Lightbulb,
+  Zap,
+  RefreshCw,
+  ExternalLink,
+  Terminal,
+} from 'lucide-react';
 
 const MODELS = [
-  { value: 'gpt-4o-mini-2024-07-18', label: 'GPT-4o Mini (Fast)' },
-  { value: 'gpt-4o-2024-08-06', label: 'GPT-4o (Balanced)' },
-  { value: 'gpt-4-turbo', label: 'GPT-4 Turbo (Advanced)' },
+  { value: 'gpt-4o-mini-2024-07-18', label: 'GPT-4o Mini', description: 'Fast and efficient' },
+  { value: 'gpt-4o-2024-08-06', label: 'GPT-4o', description: 'Balanced performance' },
+  { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', description: 'Advanced reasoning' },
 ];
 
+// Status Badge Component
+function StatusBadge({ status }) {
+  const config = {
+    processing: { variant: 'info', icon: Clock, label: 'Processing' },
+    running: { variant: 'warning', icon: Loader2, label: 'Analyzing', animate: true },
+    completed: { variant: 'success', icon: CheckCircle2, label: 'Completed' },
+    failed: { variant: 'destructive', icon: XCircle, label: 'Failed' },
+  };
+
+  const { variant, icon: Icon, label, animate } = config[status] || config.processing;
+
+  return (
+    <Badge variant={variant} className="gap-1.5">
+      <Icon className={cn("h-3 w-3", animate && "animate-spin")} />
+      {label}
+    </Badge>
+  );
+}
+
+// Progress Steps Component
+function ProgressSteps({ status }) {
+  const steps = [
+    { id: 'clone', label: 'Repository cloned', completed: true },
+    { id: 'analyze', label: 'Analyzing code structure', completed: status === 'running' || status === 'completed' },
+    { id: 'generate', label: 'Generating fix with AI', completed: status === 'completed' },
+  ];
+
+  return (
+    <div className="space-y-2">
+      {steps.map((step) => (
+        <div key={step.id} className="flex items-center gap-2">
+          <div className={cn(
+            "w-2 h-2 rounded-full transition-colors",
+            step.completed ? "bg-emerald-500" : "bg-muted-foreground/30",
+            !step.completed && status !== 'completed' && status !== 'failed' && "animate-pulse"
+          )} />
+          <span className={cn(
+            "text-sm",
+            step.completed ? "text-foreground" : "text-muted-foreground"
+          )}>
+            {step.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Patch Preview Modal
+function PatchModal({ patch, loading, onClose, taskId }) {
+  const [copied, setCopied] = useState(false);
+  const { theme } = useThemeStore();
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(JSON.stringify(patch, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success('Copied to clipboard');
+  };
+
+  return (
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div>
+            <CardTitle>Patch Preview</CardTitle>
+            <CardDescription>Task ID: {taskId}</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleCopy}>
+              {copied ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+              {copied ? 'Copied' : 'Copy'}
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="flex-1 min-h-0 pb-6">
+          <ScrollArea className="h-full max-h-[60vh]">
+            {loading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-5/6" />
+              </div>
+            ) : patch?.error ? (
+              <div className="text-center py-8">
+                <AlertCircle className="h-8 w-8 mx-auto text-destructive mb-2" />
+                <p className="text-sm text-destructive">{patch.error}</p>
+                {patch.path && (
+                  <p className="text-xs text-muted-foreground mt-2 font-mono">{patch.path}</p>
+                )}
+              </div>
+            ) : (
+              <SyntaxHighlighter
+                language="json"
+                style={isDark ? oneDark : oneLight}
+                customStyle={{ margin: 0, borderRadius: '0.5rem', fontSize: '0.75rem' }}
+              >
+                {JSON.stringify(patch, null, 2)}
+              </SyntaxHighlighter>
+            )}
+          </ScrollArea>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// How It Works Guide
+function HowItWorksGuide({ isHealthy }) {
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Lightbulb className="h-5 w-5 text-amber-500" />
+          How It Works
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-3">
+          {[
+            { step: 1, title: 'Submit Issue', description: 'Describe the bug or improvement you want' },
+            { step: 2, title: 'AI Analysis', description: 'AutoCodeRover analyzes your codebase' },
+            { step: 3, title: 'Get Patch', description: 'Receive a ready-to-apply code fix' },
+          ].map((item) => (
+            <div key={item.step} className="flex gap-3">
+              <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <span className="text-xs font-bold text-primary">{item.step}</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium">{item.title}</p>
+                <p className="text-xs text-muted-foreground">{item.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className={cn(
+          "p-3 rounded-lg border",
+          isHealthy 
+            ? "bg-emerald-500/10 border-emerald-500/20" 
+            : "bg-destructive/10 border-destructive/20"
+        )}>
+          <div className="flex items-center gap-2 mb-1">
+            <div className={cn(
+              "w-2 h-2 rounded-full",
+              isHealthy ? "bg-emerald-500" : "bg-destructive"
+            )} />
+            <span className="text-sm font-medium">
+              {isHealthy ? 'Service Online' : 'Service Offline'}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {isHealthy 
+              ? 'AutoFix is ready to process your requests' 
+              : 'Please ensure the backend service is running'}
+          </p>
+        </div>
+
+        <Card className="bg-muted/50">
+          <CardContent className="p-3">
+            <p className="text-xs font-semibold text-muted-foreground mb-2">Example Issues</p>
+            <ul className="text-xs space-y-1.5 text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <Terminal className="h-3 w-3 mt-0.5 shrink-0" />
+                Add type hints to the main() function
+              </li>
+              <li className="flex items-start gap-2">
+                <Terminal className="h-3 w-3 mt-0.5 shrink-0" />
+                Fix the bug in user authentication logic
+              </li>
+              <li className="flex items-start gap-2">
+                <Terminal className="h-3 w-3 mt-0.5 shrink-0" />
+                Refactor database connection to use pooling
+              </li>
+              <li className="flex items-start gap-2">
+                <Terminal className="h-3 w-3 mt-0.5 shrink-0" />
+                Add error handling to API endpoints
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Status Display Component
+function StatusDisplay({ taskId, status, onReset, onViewPatch, onDownloadPatch }) {
+  const config = {
+    processing: {
+      color: 'bg-sky-500/10 border-sky-500/20',
+      description: 'Preparing your fix request...',
+    },
+    running: {
+      color: 'bg-amber-500/10 border-amber-500/20',
+      description: 'AI is analyzing the code and generating a fix...',
+    },
+    completed: {
+      color: 'bg-emerald-500/10 border-emerald-500/20',
+      description: 'Fix generated successfully!',
+    },
+    failed: {
+      color: 'bg-destructive/10 border-destructive/20',
+      description: 'Failed to generate fix',
+    },
+  };
+
+  const { color, description } = config[status?.status] || config.processing;
+
+  return (
+    <Card className="h-full">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardTitle>Fix Status</CardTitle>
+        {(status?.status === 'completed' || status?.status === 'failed') && (
+          <Button variant="ghost" size="sm" onClick={onReset}>
+            <RefreshCw className="h-4 w-4 mr-1" />
+            New Fix
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Status Card */}
+        <div className={cn("p-4 rounded-lg border", color)}>
+          <div className="flex items-center justify-between mb-3">
+            <StatusBadge status={status?.status || 'processing'} />
+          </div>
+          <p className="text-sm text-muted-foreground mb-3">{description}</p>
+          <p className="text-xs text-muted-foreground">
+            Task ID: <code className="bg-background px-1.5 py-0.5 rounded text-[10px]">{taskId}</code>
+          </p>
+        </div>
+
+        {/* Error Display */}
+        {status?.status === 'failed' && status?.error && (
+          <Card className="border-destructive/50">
+            <CardContent className="p-3">
+              <p className="text-sm font-medium text-destructive mb-1">Error</p>
+              <p className="text-xs text-destructive/80">{status.error}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Success Actions */}
+        {status?.status === 'completed' && status?.patch_path && (
+          <div className="space-y-3">
+            <Card className="border-emerald-500/50">
+              <CardContent className="p-3">
+                <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-1">Patch Generated</p>
+                <p className="text-xs text-muted-foreground font-mono break-all">{status.patch_path}</p>
+              </CardContent>
+            </Card>
+            <div className="grid grid-cols-2 gap-2">
+              <Button onClick={onDownloadPatch} className="w-full">
+                <Download className="h-4 w-4 mr-1" />
+                Download
+              </Button>
+              <Button variant="outline" onClick={onViewPatch} className="w-full">
+                <ExternalLink className="h-4 w-4 mr-1" />
+                Preview
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Progress Steps */}
+        {(status?.status === 'processing' || status?.status === 'running') && (
+          <>
+            <ProgressSteps status={status?.status} />
+            <Card className="bg-muted/50">
+              <CardContent className="p-3">
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  Estimated: 10 seconds to 10 minutes
+                </p>
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Main Component
 export default function AutoFix({ selectedRepository }) {
   const [repoUrl, setRepoUrl] = useState('');
   const [issueDescription, setIssueDescription] = useState('');
@@ -22,7 +339,6 @@ export default function AutoFix({ selectedRepository }) {
   const [patchContent, setPatchContent] = useState(null);
   const [loadingPatch, setLoadingPatch] = useState(false);
 
-  // Auto-fill repo URL when repository is selected
   useEffect(() => {
     if (selectedRepository?.url) {
       setRepoUrl(selectedRepository.url);
@@ -43,6 +359,10 @@ export default function AutoFix({ selectedRepository }) {
     onSuccess: (data) => {
       setCurrentTaskId(data.task_id);
       setPollingEnabled(true);
+      toast.success('Fix request submitted');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Failed to submit fix request');
     },
   });
 
@@ -55,6 +375,8 @@ export default function AutoFix({ selectedRepository }) {
       const status = query.state.data?.status;
       if (status === 'completed' || status === 'failed') {
         setPollingEnabled(false);
+        if (status === 'completed') toast.success('Fix generated successfully!');
+        if (status === 'failed') toast.error('Failed to generate fix');
         return false;
       }
       return 5000;
@@ -63,12 +385,7 @@ export default function AutoFix({ selectedRepository }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    submitMutation.mutate({
-      repoUrl,
-      issueDescription,
-      model,
-      temperature,
-    });
+    submitMutation.mutate({ repoUrl, issueDescription, model, temperature });
   };
 
   const handleReset = () => {
@@ -81,22 +398,17 @@ export default function AutoFix({ selectedRepository }) {
 
   const handleViewPatch = async () => {
     if (!statusData?.patch_path) return;
-
     setLoadingPatch(true);
     setShowPatchModal(true);
 
     try {
-      // Try to fetch the patch content
-      // The patch_path is like: /outputs/task_id/task_id_timestamp/selected_patch.json
-      const response = await axios.get(statusData.patch_path);
-      setPatchContent(response.data);
+      const response = await fetch(statusData.patch_path);
+      const data = await response.json();
+      setPatchContent(data);
     } catch (error) {
-      console.error('Error fetching patch:', error);
-      // If direct fetch fails, show the path info
       setPatchContent({
         error: 'Could not load patch content',
         path: statusData.patch_path,
-        message: 'Patch file is available at the path above. You can access it via Docker container.'
       });
     } finally {
       setLoadingPatch(false);
@@ -105,58 +417,68 @@ export default function AutoFix({ selectedRepository }) {
 
   const handleDownloadPatch = () => {
     if (!statusData?.patch_path) return;
-
-    // Create download link
     const link = document.createElement('a');
     link.href = statusData.patch_path;
     link.download = `patch_${currentTaskId}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    toast.success('Patch downloaded');
   };
 
   const isHealthy = healthData?.healthy;
   const isSubmitting = submitMutation.isPending;
   const isFormValid = repoUrl.trim() !== '' && issueDescription.trim().length >= 10;
 
+  if (!selectedRepository) {
+    return (
+      <div className="h-full flex items-center justify-center p-8">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+            <Sparkles className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-semibold mb-2">No Repository Selected</h3>
+          <p className="text-sm text-muted-foreground">
+            Select a repository from the sidebar to use AutoFix
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="h-full flex flex-col p-6 overflow-y-auto">
         {/* Header */}
         <div className="mb-6">
-          <div className="flex items-center space-x-3 mb-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-white" />
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-md">
+              <Sparkles className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">AutoFix</h2>
-              <p className="text-sm text-gray-600">AI-powered automated code fixing</p>
+              <h2 className="text-xl font-bold">AutoFix</h2>
+              <p className="text-sm text-muted-foreground">AI-powered automated code fixing</p>
             </div>
           </div>
 
           {/* Service Status */}
           {!healthLoading && (
-            <div
-              className={`mt-4 p-3 rounded-lg border ${
-                isHealthy
-                  ? 'bg-green-50 border-green-200'
-                  : 'bg-red-50 border-red-200'
-              }`}
-            >
-              <div className="flex items-center">
-                <div
-                  className={`w-2 h-2 rounded-full mr-2 ${
-                    isHealthy ? 'bg-green-500' : 'bg-red-500'
-                  }`}
-                />
-                <span
-                  className={`text-sm font-medium ${
-                    isHealthy ? 'text-green-800' : 'text-red-800'
-                  }`}
-                >
-                  {isHealthy ? 'AutoFix Service Online' : 'AutoFix Service Offline'}
-                </span>
-              </div>
+            <div className={cn(
+              "mt-4 p-3 rounded-lg border flex items-center gap-2",
+              isHealthy 
+                ? "bg-emerald-500/10 border-emerald-500/20" 
+                : "bg-destructive/10 border-destructive/20"
+            )}>
+              <div className={cn(
+                "w-2 h-2 rounded-full",
+                isHealthy ? "bg-emerald-500" : "bg-destructive"
+              )} />
+              <span className={cn(
+                "text-sm font-medium",
+                isHealthy ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"
+              )}>
+                {isHealthy ? 'AutoFix Service Online' : 'AutoFix Service Offline'}
+              </span>
             </div>
           )}
         </div>
@@ -164,162 +486,141 @@ export default function AutoFix({ selectedRepository }) {
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1">
           {/* Left: Form */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Repository URL */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Repository URL *
-                </label>
-                <input
-                  type="url"
-                  value={repoUrl}
-                  onChange={(e) => setRepoUrl(e.target.value)}
-                  placeholder="https://github.com/user/repo.git"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                  disabled={isSubmitting}
-                  required
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  GitHub repository URL to analyze
-                </p>
-              </div>
-
-              {/* Issue Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Issue Description *
-                </label>
-                <textarea
-                  value={issueDescription}
-                  onChange={(e) => setIssueDescription(e.target.value)}
-                  placeholder="Describe the issue or improvement you want to fix. Be specific about what needs to be changed."
-                  rows={5}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none transition-all"
-                  disabled={isSubmitting}
-                  minLength={10}
-                  required
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Minimum 10 characters. Be clear and specific.
-                </p>
-              </div>
-
-              {/* Advanced Options */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="text-sm text-purple-600 hover:text-purple-800 font-medium transition-colors"
-                >
-                  {showAdvanced ? '− Hide' : '+ Show'} Advanced Options
-                </button>
-              </div>
-
-              {showAdvanced && (
-                <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
-                  {/* Model Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      AI Model
-                    </label>
-                    <select
-                      value={model}
-                      onChange={(e) => setModel(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      disabled={isSubmitting}
-                    >
-                      {MODELS.map((m) => (
-                        <option key={m.value} value={m.value}>
-                          {m.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Temperature */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Temperature: {temperature}
-                    </label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={temperature}
-                      onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                      className="w-full"
-                      disabled={isSubmitting}
-                    />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>Focused</span>
-                      <span>Creative</span>
-                    </div>
-                  </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Submit Fix Request</CardTitle>
+              <CardDescription>Describe the issue you want to fix</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Repository URL */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Repository URL</label>
+                  <Input
+                    type="url"
+                    value={repoUrl}
+                    onChange={(e) => setRepoUrl(e.target.value)}
+                    placeholder="https://github.com/user/repo.git"
+                    disabled={isSubmitting}
+                    required
+                  />
                 </div>
-              )}
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={!isFormValid || isSubmitting || !isHealthy || currentTaskId}
-                className={`w-full py-3 px-4 rounded-lg font-medium text-white transition-all flex items-center justify-center space-x-2 ${
-                  !isFormValid || isSubmitting || !isHealthy || currentTaskId
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 shadow-lg hover:shadow-xl'
-                }`}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Submitting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-5 h-5" />
-                    <span>Generate Fix</span>
-                  </>
+                {/* Issue Description */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Issue Description</label>
+                  <Textarea
+                    value={issueDescription}
+                    onChange={(e) => setIssueDescription(e.target.value)}
+                    placeholder="Describe the issue or improvement you want to fix. Be specific about what needs to be changed."
+                    rows={5}
+                    disabled={isSubmitting}
+                    minLength={10}
+                    required
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Minimum 10 characters. Be clear and specific.
+                  </p>
+                </div>
+
+                {/* Advanced Options Toggle */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="w-full justify-between"
+                >
+                  <span>Advanced Options</span>
+                  {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+
+                {showAdvanced && (
+                  <Card className="bg-muted/50">
+                    <CardContent className="p-4 space-y-4">
+                      {/* Model Selection */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">AI Model</label>
+                        <select
+                          value={model}
+                          onChange={(e) => setModel(e.target.value)}
+                          className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                          disabled={isSubmitting}
+                        >
+                          {MODELS.map((m) => (
+                            <option key={m.value} value={m.value}>
+                              {m.label} - {m.description}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Temperature */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-sm font-medium">Temperature</label>
+                          <span className="text-sm text-muted-foreground">{temperature}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.1"
+                          value={temperature}
+                          onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                          className="w-full"
+                          disabled={isSubmitting}
+                        />
+                        <div className="flex justify-between text-[10px] text-muted-foreground">
+                          <span>Focused</span>
+                          <span>Creative</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 )}
-              </button>
-            </form>
 
-            {/* Example Issues */}
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h4 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
-                <AlertCircle className="w-4 h-4 mr-1" />
-                Example Issues
-              </h4>
-              <ul className="text-xs text-blue-800 space-y-1">
-                <li>• Add type hints to the main() function</li>
-                <li>• Fix the bug in user authentication logic</li>
-                <li>• Refactor database connection to use pooling</li>
-                <li>• Add error handling to API endpoints</li>
-              </ul>
-            </div>
-          </div>
+                {/* Submit Button */}
+                <Button
+                  type="submit"
+                  disabled={!isFormValid || isSubmitting || !isHealthy || currentTaskId}
+                  className="w-full"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Generate Fix
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
 
           {/* Right: Status or Guide */}
-          <div>
-            {currentTaskId || statusData ? (
-              <StatusDisplay
-                taskId={currentTaskId}
-                status={statusData}
-                onReset={handleReset}
-                onViewPatch={handleViewPatch}
-                onDownloadPatch={handleDownloadPatch}
-              />
-            ) : (
-              <HowItWorksGuide isHealthy={isHealthy} />
-            )}
-          </div>
+          {currentTaskId || statusData ? (
+            <StatusDisplay
+              taskId={currentTaskId}
+              status={statusData}
+              onReset={handleReset}
+              onViewPatch={handleViewPatch}
+              onDownloadPatch={handleDownloadPatch}
+            />
+          ) : (
+            <HowItWorksGuide isHealthy={isHealthy} />
+          )}
         </div>
       </div>
 
       {/* Patch Modal */}
       {showPatchModal && (
         <PatchModal
-          patchContent={patchContent}
+          patch={patchContent}
           loading={loadingPatch}
           onClose={() => {
             setShowPatchModal(false);
@@ -329,343 +630,5 @@ export default function AutoFix({ selectedRepository }) {
         />
       )}
     </>
-  );
-}
-
-// Status Display Component
-function StatusDisplay({ taskId, status, onReset, onViewPatch, onDownloadPatch }) {
-  const getStatusConfig = () => {
-    if (!status) {
-      return {
-        label: 'Processing',
-        icon: Clock,
-        color: 'blue',
-        description: 'Preparing your fix request...',
-      };
-    }
-
-    switch (status.status) {
-      case 'processing':
-        return {
-          label: 'Processing',
-          icon: Clock,
-          color: 'blue',
-          description: 'Cloning repository and preparing analysis...',
-        };
-      case 'running':
-        return {
-          label: 'Analyzing',
-          icon: Loader2,
-          color: 'yellow',
-          description: 'AI is analyzing the code and generating a fix...',
-        };
-      case 'completed':
-        return {
-          label: 'Completed',
-          icon: CheckCircle,
-          color: 'green',
-          description: 'Fix generated successfully!',
-        };
-      case 'failed':
-        return {
-          label: 'Failed',
-          icon: XCircle,
-          color: 'red',
-          description: 'Failed to generate fix',
-        };
-      default:
-        return {
-          label: 'Unknown',
-          icon: AlertCircle,
-          color: 'gray',
-          description: 'Unknown status',
-        };
-    }
-  };
-
-  const config = getStatusConfig();
-  const Icon = config.icon;
-
-  const colorClasses = {
-    blue: {
-      bg: 'bg-blue-50',
-      border: 'border-blue-200',
-      text: 'text-blue-800',
-      badge: 'bg-blue-100 text-blue-800',
-    },
-    yellow: {
-      bg: 'bg-yellow-50',
-      border: 'border-yellow-200',
-      text: 'text-yellow-800',
-      badge: 'bg-yellow-100 text-yellow-800',
-    },
-    green: {
-      bg: 'bg-green-50',
-      border: 'border-green-200',
-      text: 'text-green-800',
-      badge: 'bg-green-100 text-green-800',
-    },
-    red: {
-      bg: 'bg-red-50',
-      border: 'border-red-200',
-      text: 'text-red-800',
-      badge: 'bg-red-100 text-red-800',
-    },
-  };
-
-  const colors = colorClasses[config.color];
-
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-bold text-gray-900">Fix Status</h3>
-        {(status?.status === 'completed' || status?.status === 'failed') && (
-          <button
-            onClick={onReset}
-            className="text-sm text-purple-600 hover:text-purple-800 font-medium transition-colors"
-          >
-            ← Start New Fix
-          </button>
-        )}
-      </div>
-
-      {/* Status Card */}
-      <div className={`${colors.bg} border ${colors.border} rounded-lg p-4`}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center space-x-2">
-            <Icon
-              className={`w-6 h-6 ${config.color === 'yellow' || config.color === 'blue' ? 'animate-spin' : ''}`}
-            />
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${colors.badge}`}>
-              {config.label}
-            </span>
-          </div>
-        </div>
-
-        <p className={`${colors.text} text-sm mb-3`}>{config.description}</p>
-
-        <div className="mt-2">
-          <p className="text-xs text-gray-500">
-            Task ID: <code className="bg-white px-2 py-1 rounded">{taskId}</code>
-          </p>
-        </div>
-
-        {/* Error */}
-        {status?.status === 'failed' && status?.error && (
-          <div className="mt-3 p-3 bg-white rounded border border-red-200">
-            <p className="text-sm font-medium text-red-800 mb-1">Error:</p>
-            <p className="text-sm text-red-700">{status.error}</p>
-          </div>
-        )}
-
-        {/* Success - Patch Path */}
-        {status?.status === 'completed' && status?.patch_path && (
-          <div className="mt-4 space-y-3">
-            <div className="p-3 bg-white rounded border border-green-200">
-              <p className="text-sm font-medium text-green-800 mb-1">📄 Patch Generated</p>
-              <p className="text-xs text-gray-600 font-mono break-all">{status.patch_path}</p>
-            </div>
-
-            <div className="flex space-x-2">
-              <button
-                onClick={onDownloadPatch}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-1"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Patch</span>
-              </button>
-              <button
-                onClick={onViewPatch}
-                className="flex-1 bg-white hover:bg-gray-50 text-green-700 border border-green-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-1"
-              >
-                <AlertCircle className="w-4 h-4" />
-                <span>View Patch</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Progress Steps */}
-        {(status?.status === 'processing' || status?.status === 'running') && (
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
-              <span className="text-sm text-gray-700">Repository cloned</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div
-                className={`w-2 h-2 ${
-                  status?.status === 'running' ? 'bg-green-500' : 'bg-gray-300'
-                } rounded-full`}
-              />
-              <span className="text-sm text-gray-700">Analyzing code structure</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-gray-300 rounded-full animate-pulse" />
-              <span className="text-sm text-gray-700">Generating fix with AI...</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Estimated Time */}
-      {(status?.status === 'processing' || status?.status === 'running') && (
-        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-          <p className="text-sm text-gray-600">
-            ⏱️ Estimated time: 10 seconds to 10 minutes depending on complexity
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Patch Modal Component
-function PatchModal({ patchContent, loading, onClose, taskId }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    const textToCopy = JSON.stringify(patchContent, null, 2);
-    navigator.clipboard.writeText(textToCopy);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Patch Preview</h2>
-            <p className="text-sm text-gray-500 mt-1">Task ID: {taskId}</p>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handleCopy}
-              className="px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
-            >
-              <Copy className="w-4 h-4" />
-              <span>{copied ? 'Copied!' : 'Copy'}</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-              <span className="ml-3 text-gray-600">Loading patch...</span>
-            </div>
-          ) : patchContent?.error ? (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-800 font-medium mb-2">{patchContent.error}</p>
-              <p className="text-sm text-red-700">{patchContent.message}</p>
-              {patchContent.path && (
-                <p className="mt-2 text-xs text-gray-600 font-mono">
-                  Path: {patchContent.path}
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm overflow-x-auto">
-              <pre className="whitespace-pre-wrap">
-                {JSON.stringify(patchContent, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-gray-200 p-4 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// How It Works Guide
-function HowItWorksGuide({ isHealthy }) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h3 className="text-xl font-bold text-gray-900 mb-4">How It Works</h3>
-
-      <div className="space-y-4">
-        <div className="flex items-start">
-          <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-            <span className="text-purple-600 font-bold">1</span>
-          </div>
-          <div className="ml-4">
-            <h4 className="font-medium text-gray-900">Submit Repository</h4>
-            <p className="text-sm text-gray-600">
-              Provide a GitHub repository URL and describe the issue
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-start">
-          <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-            <span className="text-purple-600 font-bold">2</span>
-          </div>
-          <div className="ml-4">
-            <h4 className="font-medium text-gray-900">AI Analysis</h4>
-            <p className="text-sm text-gray-600">
-              AI analyzes your code and understands the context
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-start">
-          <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-            <span className="text-purple-600 font-bold">3</span>
-          </div>
-          <div className="ml-4">
-            <h4 className="font-medium text-gray-900">Generate Fix</h4>
-            <p className="text-sm text-gray-600">
-              Receive a ready-to-apply patch file
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-start">
-          <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-            <span className="text-purple-600 font-bold">4</span>
-          </div>
-          <div className="ml-4">
-            <h4 className="font-medium text-gray-900">Review & Apply</h4>
-            <p className="text-sm text-gray-600">Review and apply the patch to your code</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="mt-6 pt-6 border-t border-gray-200">
-        <h4 className="font-medium text-gray-900 mb-3">Success Metrics</h4>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-purple-50 rounded-lg p-3">
-            <p className="text-2xl font-bold text-purple-600">10s-10m</p>
-            <p className="text-xs text-gray-600">Average Time</p>
-          </div>
-          <div className="bg-green-50 rounded-lg p-3">
-            <p className="text-2xl font-bold text-green-600">High</p>
-            <p className="text-xs text-gray-600">Success Rate</p>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
