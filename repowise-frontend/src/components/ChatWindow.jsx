@@ -1,38 +1,341 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { chatAPI, repositoryAPI, ragAPI, isRAGAvailable } from '../services/api';
+import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { toast } from 'sonner';
+import { chatAPI } from '../services/api';
+import { useThemeStore } from '../stores/theme-store';
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Badge } from './ui/badge';
+import { Switch } from './ui/switch';
+import { Card } from './ui/card';
+import { ScrollArea } from './ui/scroll-area';
+import { Skeleton } from './ui/skeleton';
+import {
+  Send,
+  Copy,
+  Check,
+  StopCircle,
+  Settings2,
+  ChevronDown,
+  ChevronUp,
+  Zap,
+  Network,
+  BookOpen,
+  FileText,
+  MessageSquare,
+  Sparkles,
+  Radio,
+  Database,
+  RefreshCw,
+} from 'lucide-react';
 
-/**
- * 🌊 STREAMING-ENHANCED Chat Window Component
- *
- * New Features:
- * - Real-time streaming responses (typewriter effect)
- * - Streaming toggle (stream vs normal mode)
- * - Progressive message rendering
- * - Abort streaming capability
- * - All existing features preserved
- */
-const EnhancedChatWindow = ({ selectedRepository }) => {
+// Code Block Component with Copy Button
+function CodeBlock({ language, children }) {
+  const [copied, setCopied] = useState(false);
+  const { theme } = useThemeStore();
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(String(children));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="relative group my-3">
+      <div className="absolute right-2 top-2 z-10">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-background"
+          onClick={handleCopy}
+        >
+          {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+        </Button>
+      </div>
+      {language && (
+        <div className="absolute left-3 top-2 text-[10px] text-muted-foreground font-mono uppercase">
+          {language}
+        </div>
+      )}
+      <SyntaxHighlighter
+        language={language || 'text'}
+        style={isDark ? oneDark : oneLight}
+        customStyle={{
+          margin: 0,
+          borderRadius: '0.5rem',
+          fontSize: '0.8125rem',
+          paddingTop: language ? '2rem' : '1rem',
+        }}
+        showLineNumbers={String(children).split('\n').length > 3}
+      >
+        {String(children).replace(/\n$/, '')}
+      </SyntaxHighlighter>
+    </div>
+  );
+}
+
+// Message Component
+function Message({ message, isStreaming }) {
+  const isUser = message.role === 'user';
+  const isError = message.role === 'error';
+
+  return (
+    <div className={cn(
+      "flex gap-3 animate-fade-in",
+      isUser ? "justify-end" : "justify-start"
+    )}>
+      {!isUser && (
+        <div className={cn(
+          "w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1",
+          isError ? "bg-destructive/10" : "bg-primary/10"
+        )}>
+          {isError ? (
+            <span className="text-destructive text-sm">!</span>
+          ) : (
+            <Sparkles className="h-4 w-4 text-primary" />
+          )}
+        </div>
+      )}
+      
+      <div className={cn(
+        "max-w-[80%] rounded-2xl px-4 py-3",
+        isUser && "bg-primary text-primary-foreground",
+        !isUser && !isError && "bg-muted",
+        isError && "bg-destructive/10 text-destructive border border-destructive/20"
+      )}>
+        {isUser ? (
+          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+        ) : (
+          <div className="markdown-content text-sm">
+            <ReactMarkdown
+              components={{
+                code({ inline, className, children, ...props }) {
+                  const match = /language-(\w+)/.exec(className || '');
+                  return !inline && match ? (
+                    <CodeBlock language={match[1]}>{children}</CodeBlock>
+                  ) : (
+                    <code className="bg-background/50 dark:bg-background/30 px-1.5 py-0.5 rounded text-[13px] font-mono" {...props}>
+                      {children}
+                    </code>
+                  );
+                },
+                pre({ children }) {
+                  return <>{children}</>;
+                },
+                p({ children }) {
+                  return <p className="mb-2 last:mb-0">{children}</p>;
+                },
+                ul({ children }) {
+                  return <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>;
+                },
+                ol({ children }) {
+                  return <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>;
+                },
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+            
+            {isStreaming && (
+              <span className="inline-block w-2 h-4 bg-foreground/70 ml-0.5 animate-pulse" />
+            )}
+          </div>
+        )}
+
+        {/* Metadata Badges */}
+        {!isUser && !isError && message.content && !isStreaming && (
+          <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-border/50">
+            {message.streamed && (
+              <Badge variant="stream" className="text-[10px]">
+                <Radio className="h-2.5 w-2.5 mr-1" />
+                Streamed
+              </Badge>
+            )}
+            {message.graph_used && (
+              <Badge variant="graph" className="text-[10px]">
+                <Network className="h-2.5 w-2.5 mr-1" />
+                Graph
+              </Badge>
+            )}
+            {message.rag_used && !message.graph_used && (
+              <Badge variant="vector" className="text-[10px]">
+                <Database className="h-2.5 w-2.5 mr-1" />
+                Vector
+              </Badge>
+            )}
+            {message.rag_used && message.graph_used && (
+              <Badge variant="hybrid" className="text-[10px]">
+                <Zap className="h-2.5 w-2.5 mr-1" />
+                Hybrid
+              </Badge>
+            )}
+            {message.confidence > 0 && (
+              <Badge 
+                variant={message.confidence >= 0.8 ? "success" : message.confidence >= 0.6 ? "warning" : "destructive"}
+                className="text-[10px]"
+              >
+                {(message.confidence * 100).toFixed(0)}%
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {/* Sources */}
+        {!isUser && message.sources && message.sources.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-border/50">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sources</p>
+            <div className="space-y-1">
+              {message.sources.slice(0, 3).map((source, idx) => (
+                <div key={idx} className="flex items-center gap-1.5 text-xs text-muted-foreground truncate">
+                  <FileText className="h-3 w-3 shrink-0" />
+                  <span className="truncate font-mono">{source}</span>
+                </div>
+              ))}
+              {message.sources.length > 3 && (
+                <p className="text-[10px] text-muted-foreground">+{message.sources.length - 3} more</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {isUser && (
+        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0 mt-1">
+          <span className="text-primary-foreground text-sm font-medium">U</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Search Mode Selector
+function SearchModeSelector({ searchMode, setSearchMode, showAdvanced, setShowAdvanced }) {
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={() => setShowAdvanced(!showAdvanced)}
+        className="flex items-center justify-between w-full text-xs font-medium text-muted-foreground hover:text-foreground transition"
+      >
+        <span>Search Mode</span>
+        {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+      </button>
+
+      {showAdvanced && (
+        <div className="space-y-1 pl-2 border-l-2 border-border">
+          {[
+            { value: 'auto', label: 'Auto', icon: Zap, description: 'Smart routing based on question' },
+            { value: 'graph', label: 'Graph', icon: Network, description: 'Code structure & relationships' },
+            { value: 'vector', label: 'Vector', icon: Database, description: 'Semantic code search' },
+          ].map((mode) => {
+            const Icon = mode.icon;
+            return (
+              <label
+                key={mode.value}
+                className={cn(
+                  "flex items-start gap-2 p-2 rounded-lg cursor-pointer transition",
+                  searchMode === mode.value ? "bg-accent" : "hover:bg-accent/50"
+                )}
+              >
+                <input
+                  type="radio"
+                  value={mode.value}
+                  checked={searchMode === mode.value}
+                  onChange={(e) => setSearchMode(e.target.value)}
+                  className="mt-1 h-3.5 w-3.5"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5 text-sm font-medium">
+                    <Icon className="h-3.5 w-3.5" />
+                    {mode.label}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">{mode.description}</p>
+                </div>
+                {searchMode === mode.value && (
+                  <Badge variant="secondary" className="text-[10px]">Active</Badge>
+                )}
+              </label>
+            );
+          })}
+        </div>
+      )}
+
+      {!showAdvanced && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span>Current:</span>
+          <Badge variant="outline" className="text-[10px]">
+            {searchMode === 'auto' && <><Zap className="h-2.5 w-2.5 mr-1" />Auto</>}
+            {searchMode === 'graph' && <><Network className="h-2.5 w-2.5 mr-1" />Graph</>}
+            {searchMode === 'vector' && <><Database className="h-2.5 w-2.5 mr-1" />Vector</>}
+          </Badge>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Empty State
+function EmptyState({ streamingEnabled }) {
+  return (
+    <div className="flex-1 flex items-center justify-center p-8">
+      <div className="text-center max-w-md">
+        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+          <MessageSquare className="h-8 w-8 text-primary" />
+        </div>
+        <h3 className="text-lg font-semibold mb-2">Start a Conversation</h3>
+        <p className="text-sm text-muted-foreground mb-6">
+          Ask questions about the repository code, structure, or history.
+        </p>
+        <div className="grid grid-cols-2 gap-2 text-left">
+          {[
+            { icon: Network, text: 'Who are the main contributors?' },
+            { icon: BookOpen, text: 'How does the auth system work?' },
+            { icon: FileText, text: 'What changed in the last commit?' },
+            { icon: Zap, text: 'Show me the hot spots' },
+          ].map((item, idx) => (
+            <div key={idx} className="flex items-start gap-2 p-2 rounded-lg bg-muted/50 text-xs">
+              <item.icon className="h-3.5 w-3.5 mt-0.5 text-muted-foreground" />
+              <span>{item.text}</span>
+            </div>
+          ))}
+        </div>
+        {streamingEnabled && (
+          <p className="mt-4 text-xs text-primary flex items-center justify-center gap-1.5">
+            <Radio className="h-3 w-3" />
+            Streaming enabled - responses appear in real-time
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Main Component
+export default function ChatWindow({ selectedRepository }) {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [conversationId, setConversationId] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [ragEnabled, setRagEnabled] = useState(true);
-  const [autoIndex, setAutoIndex] = useState(true);
   const [indexStatus, setIndexStatus] = useState(null);
   const [isIndexing, setIsIndexing] = useState(false);
 
-  // Search Mode State
+  // Settings
+  const [ragEnabled, setRagEnabled] = useState(true);
+  const [autoIndex, setAutoIndex] = useState(true);
   const [searchMode, setSearchMode] = useState('auto');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
-  // 🆕 STREAMING STATE
+  // Streaming
   const [streamingEnabled, setStreamingEnabled] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState('');
   const abortControllerRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  // Auto-scroll to bottom
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -41,43 +344,38 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
     scrollToBottom();
   }, [messages, streamingMessage]);
 
-  // Check RAG status when repository changes
   useEffect(() => {
     if (selectedRepository) {
       checkIndexStatus();
     }
   }, [selectedRepository]);
 
-  // Check if repository is indexed
   const checkIndexStatus = async () => {
     if (!selectedRepository) return;
     try {
-        const status = await chatAPI.getIndexStatus(selectedRepository.url);
-        setIndexStatus(status);
+      const status = await chatAPI.getIndexStatus(selectedRepository.url);
+      setIndexStatus(status);
     } catch (error) {
-        console.error('Error checking index status:', error);
-        setIndexStatus(null);
+      console.error('Error checking index status:', error);
+      setIndexStatus(null);
     }
   };
 
-  // Manually index repository
   const handleManualIndex = async () => {
     if (!selectedRepository || isIndexing) return;
     setIsIndexing(true);
     try {
       const result = await chatAPI.indexRepository(selectedRepository.url, true, 50);
-      console.log('Indexing result:', result);
       await checkIndexStatus();
-      alert(`Successfully indexed! ${result.document_count || 0} chunks created.`);
+      toast.success(`Indexed ${result.document_count || 0} chunks successfully`);
     } catch (error) {
       console.error('Error indexing repository:', error);
-      alert('Failed to index repository. Check console for details.');
+      toast.error('Failed to index repository');
     } finally {
       setIsIndexing(false);
     }
   };
 
-  // 🆕 STREAMING: Send message with streaming support
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
 
@@ -85,7 +383,6 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
     setInputMessage('');
     setLoading(true);
 
-    // Add user message to chat
     setMessages((prev) => [
       ...prev,
       { role: 'user', content: userMessage, timestamp: new Date().toISOString() },
@@ -94,15 +391,11 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
     try {
       const useGraph = searchMode !== 'vector';
 
-      // 🌊 STREAMING MODE
       if (streamingEnabled) {
         await handleStreamingResponse(userMessage, useGraph);
-      }
-      // 📄 NORMAL MODE
-      else {
+      } else {
         await handleNormalResponse(userMessage, useGraph);
       }
-
     } catch (error) {
       console.error('Error sending message:', error);
       setMessages((prev) => [
@@ -113,6 +406,7 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
           timestamp: new Date().toISOString(),
         },
       ]);
+      toast.error('Failed to send message');
     } finally {
       setLoading(false);
       setIsStreaming(false);
@@ -120,20 +414,16 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
     }
   };
 
-  // 🆕 Handle streaming response
   const handleStreamingResponse = async (userMessage, useGraph) => {
     setIsStreaming(true);
     setStreamingMessage('');
 
-    // Create abort controller
     abortControllerRef.current = new AbortController();
 
     try {
       const response = await fetch('/api/chat/send', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMessage,
           repository_url: selectedRepository.url,
@@ -142,7 +432,7 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
           use_rag: ragEnabled,
           auto_index: autoIndex,
           use_graph: useGraph,
-          stream: true,  // ← ENABLE STREAMING!
+          stream: true,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -165,30 +455,21 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
             try {
               const data = JSON.parse(line.slice(6));
 
-              if (data.type === 'start') {
-                // Save conversation ID
-                if (!conversationId) {
-                  setConversationId(data.conversation_id);
-                }
-              }
-              else if (data.type === 'sources') {
-                // Save sources metadata
+              if (data.type === 'start' && !conversationId) {
+                setConversationId(data.conversation_id);
+              } else if (data.type === 'sources') {
                 metadata.sources = data.sources;
-              }
-              else if (data.type === 'chunk') {
-                // Append chunk to streaming message
+              } else if (data.type === 'chunk') {
                 fullMessage += data.content;
                 setStreamingMessage(fullMessage);
-              }
-              else if (data.type === 'done') {
-                // Stream completed - add full message to chat
+              } else if (data.type === 'done') {
                 setMessages((prev) => [
                   ...prev,
                   {
                     role: 'assistant',
                     content: fullMessage,
                     sources: metadata.sources || [],
-                    confidence: 0.9,  // Streaming mode assumed high confidence
+                    confidence: 0.9,
                     rag_used: ragEnabled,
                     graph_used: useGraph,
                     timestamp: new Date().toISOString(),
@@ -196,8 +477,7 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
                   },
                 ]);
                 setStreamingMessage('');
-              }
-              else if (data.type === 'error') {
+              } else if (data.type === 'error') {
                 throw new Error(data.message);
               }
             } catch (parseError) {
@@ -206,10 +486,8 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
           }
         }
       }
-
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.log('Streaming aborted by user');
         setMessages((prev) => [
           ...prev,
           {
@@ -226,7 +504,6 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
     }
   };
 
-  // 📄 Handle normal (non-streaming) response
   const handleNormalResponse = async (userMessage, useGraph) => {
     const response = await chatAPI.sendMessage(
       userMessage,
@@ -237,12 +514,10 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
       useGraph
     );
 
-    // Save conversation ID
     if (!conversationId) {
       setConversationId(response.conversation_id);
     }
 
-    // Add assistant response
     setMessages((prev) => [
       ...prev,
       {
@@ -259,427 +534,216 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
       },
     ]);
 
-    // Update index status if auto-indexed
     if (response.indexed_chunks > 0) {
       await checkIndexStatus();
     }
   };
 
-  // 🆕 Abort streaming
   const handleAbortStreaming = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
   };
 
-  // Render message
-  const renderMessage = (message, index) => {
-    if (message.role === 'user') {
-      return (
-        <div key={index} className="flex justify-end mb-4">
-          <div className="bg-blue-500 text-white rounded-lg px-4 py-2 max-w-[70%]">
-            <p className="whitespace-pre-wrap">{message.content}</p>
+  if (!selectedRepository) {
+    return (
+      <div className="h-full flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+            <MessageSquare className="h-8 w-8 text-muted-foreground" />
           </div>
+          <h3 className="text-lg font-semibold mb-2">No Repository Selected</h3>
+          <p className="text-sm text-muted-foreground">
+            Select a repository from the sidebar to start chatting
+          </p>
         </div>
-      );
-    }
-
-    if (message.role === 'assistant') {
-      return (
-        <div key={index} className="flex justify-start mb-4">
-          <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 max-w-[70%]">
-            {/* Message Content */}
-            <div className="mb-2 whitespace-pre-wrap prose prose-sm max-w-none">
-              {message.content}
-            </div>
-
-            {/* Mode Badges */}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {/* 🆕 Streaming Badge */}
-              {message.streamed && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-100 text-cyan-800 rounded text-xs font-medium">
-                  🌊 Streamed
-                  {message.interrupted && ' (interrupted)'}
-                </span>
-              )}
-
-              {/* Graph Badge */}
-              {message.graph_used && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
-                  🕸️ Graph Used
-                  {message.graph_context && (
-                    <span className="ml-1 text-green-600">
-                      ({message.graph_context})
-                    </span>
-                  )}
-                </span>
-              )}
-
-              {/* RAG Badge */}
-              {message.rag_used && !message.graph_used && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">
-                  📚 Vector Search
-                </span>
-              )}
-
-              {/* Hybrid Badge */}
-              {message.rag_used && message.graph_used && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                  ⚡ Hybrid RAG
-                </span>
-              )}
-
-              {/* Auto-indexed Badge */}
-              {message.indexed_chunks > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">
-                  📚 {message.indexed_chunks} chunks
-                </span>
-              )}
-
-              {/* Confidence Badge */}
-              {message.confidence > 0 && (
-                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
-                  message.confidence >= 0.8
-                    ? 'bg-green-100 text-green-800'
-                    : message.confidence >= 0.6
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {(message.confidence * 100).toFixed(0)}% confident
-                </span>
-              )}
-            </div>
-
-            {/* Sources */}
-            {message.sources && message.sources.length > 0 && (
-              <div className="mt-3 text-xs">
-                <div className="font-semibold text-gray-600 mb-1">Sources:</div>
-                <div className="space-y-1">
-                  {message.sources.map((source, idx) => (
-                    <div key={idx} className="text-gray-500 truncate">
-                      📄 {source}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (message.role === 'error') {
-      return (
-        <div key={index} className="flex justify-start mb-4">
-          <div className="bg-red-100 text-red-800 rounded-lg px-4 py-2 max-w-[70%]">
-            <p className="whitespace-pre-wrap">{message.content}</p>
-          </div>
-        </div>
-      );
-    }
-
-    return null;
-  };
-
-  // Search Mode Selector Component
-  const SearchModeSelector = () => (
-    <div className="space-y-2">
-      <button
-        onClick={() => setShowAdvanced(!showAdvanced)}
-        className="flex items-center justify-between w-full text-sm font-medium text-gray-700 hover:text-gray-900 transition"
-      >
-        <span>🎯 Search Mode</span>
-        <span className="text-xs text-gray-500">
-          {showAdvanced ? '▼ Hide' : '▶ Show'}
-        </span>
-      </button>
-
-      {showAdvanced && (
-        <div className="space-y-2 pl-2 border-l-2 border-gray-200">
-          {/* Auto Mode */}
-          <label className="flex items-start space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded transition">
-            <input
-              type="radio"
-              value="auto"
-              checked={searchMode === 'auto'}
-              onChange={(e) => setSearchMode(e.target.value)}
-              className="mt-1 text-blue-600 focus:ring-blue-500"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium text-gray-900">
-                ⚡ Auto (Recommended)
-              </div>
-              <div className="text-xs text-gray-500">
-                Smart routing based on question type
-              </div>
-            </div>
-            {searchMode === 'auto' && (
-              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">
-                Active
-              </span>
-            )}
-          </label>
-
-          {/* Graph Mode */}
-          <label className="flex items-start space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded transition">
-            <input
-              type="radio"
-              value="graph"
-              checked={searchMode === 'graph'}
-              onChange={(e) => setSearchMode(e.target.value)}
-              className="mt-1 text-green-600 focus:ring-green-500"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium text-gray-900">
-                🕸️ Graph Search
-              </div>
-              <div className="text-xs text-gray-500">
-                Use Neo4j for code structure, relationships, and history
-              </div>
-            </div>
-            {searchMode === 'graph' && (
-              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-medium">
-                Active
-              </span>
-            )}
-          </label>
-
-          {/* Vector Mode */}
-          <label className="flex items-start space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded transition">
-            <input
-              type="radio"
-              value="vector"
-              checked={searchMode === 'vector'}
-              onChange={(e) => setSearchMode(e.target.value)}
-              className="mt-1 text-purple-600 focus:ring-purple-500"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium text-gray-900">
-                📚 Vector Search
-              </div>
-              <div className="text-xs text-gray-500">
-                Use ChromaDB for semantic code search
-              </div>
-            </div>
-            {searchMode === 'vector' && (
-              <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-medium">
-                Active
-              </span>
-            )}
-          </label>
-        </div>
-      )}
-
-      {/* Mode Indicator */}
-      {!showAdvanced && (
-        <div className="mt-2 text-xs text-gray-600">
-          Currently: <span className="font-medium text-gray-900">
-            {searchMode === 'auto' ? '⚡ Auto' : searchMode === 'graph' ? '🕸️ Graph' : '📚 Vector'}
-          </span>
-        </div>
-      )}
-    </div>
-  );
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header with Index Status */}
-      <div className="bg-gray-100 p-4 border-b">
-        <h2 className="text-xl font-bold mb-2">Chat</h2>
-
-        {selectedRepository && (
-          <div className="flex items-center justify-between">
+      {/* Settings Bar */}
+      <div className="border-b border-border bg-card/30 px-4 py-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
             {/* Index Status */}
-            <div className="flex items-center space-x-2">
-              {indexStatus ? (
+            {indexStatus ? (
+              indexStatus.indexed ? (
+                <Badge variant="success" className="text-xs">
+                  <Check className="h-3 w-3 mr-1" />
+                  Indexed ({indexStatus.total_chunks} chunks)
+                </Badge>
+              ) : (
+                <Badge variant="warning" className="text-xs">
+                  Not indexed
+                </Badge>
+              )
+            ) : (
+              <Skeleton className="h-5 w-24" />
+            )}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleManualIndex}
+              disabled={isIndexing || (indexStatus && indexStatus.indexed)}
+              className="h-7 text-xs"
+            >
+              {isIndexing ? (
                 <>
-                  {indexStatus.indexed ? (
-                    <span className="text-green-600 text-sm">
-                      ✓ Indexed ({indexStatus.total_chunks} chunks)
-                    </span>
-                  ) : (
-                    <span className="text-yellow-600 text-sm">
-                      ⚠ Not indexed
-                    </span>
-                  )}
+                  <RefreshCw className="h-3 w-3 animate-spin mr-1" />
+                  Indexing...
                 </>
               ) : (
-                <span className="text-gray-500 text-sm">Checking...</span>
+                <>
+                  <Database className="h-3 w-3 mr-1" />
+                  Index Now
+                </>
               )}
+            </Button>
+          </div>
 
-              {/* Manual Index Button */}
-              <button
-                onClick={handleManualIndex}
-                disabled={isIndexing || (indexStatus && indexStatus.indexed)}
-                className="text-xs bg-blue-500 text-white px-2 py-1 rounded disabled:bg-gray-400 hover:bg-blue-600 transition-colors"
-              >
-                {isIndexing ? 'Indexing...' : 'Index Now'}
-              </button>
-            </div>
+          <div className="flex items-center gap-4">
+            {/* Streaming Toggle */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Switch
+                checked={streamingEnabled}
+                onCheckedChange={setStreamingEnabled}
+              />
+              <span className="text-xs text-muted-foreground">Stream</span>
+            </label>
 
-            {/* Feature Toggles */}
-            <div className="flex items-center space-x-3 text-sm">
-              {/* 🆕 Streaming Toggle */}
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={streamingEnabled}
-                  onChange={(e) => setStreamingEnabled(e.target.checked)}
-                  className="w-4 h-4 text-cyan-600 rounded"
-                />
-                <span className="text-gray-700 flex items-center gap-1">
-                  🌊 Stream
-                </span>
-              </label>
+            {/* RAG Toggle */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Switch checked={ragEnabled} onCheckedChange={setRagEnabled} />
+              <span className="text-xs text-muted-foreground">RAG</span>
+            </label>
 
-              {/* RAG Toggle */}
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={ragEnabled}
-                  onChange={(e) => setRagEnabled(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-                <span className="text-gray-700">RAG</span>
-              </label>
+            {/* Settings Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setShowSettings(!showSettings)}
+            >
+              <Settings2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
 
-              {/* Auto-Index Toggle */}
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={autoIndex}
-                  onChange={(e) => setAutoIndex(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-                <span className="text-gray-700">Auto-Index</span>
-              </label>
+        {/* Advanced Settings Panel */}
+        {showSettings && (
+          <div className="mt-3 pt-3 border-t border-border">
+            <div className="grid grid-cols-2 gap-4">
+              <SearchModeSelector
+                searchMode={searchMode}
+                setSearchMode={setSearchMode}
+                showAdvanced={showAdvanced}
+                setShowAdvanced={setShowAdvanced}
+              />
+              <div className="space-y-2">
+                <label className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Auto-Index</span>
+                  <Switch checked={autoIndex} onCheckedChange={setAutoIndex} />
+                </label>
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Search Mode Selector */}
-      {selectedRepository && (
-        <div className="p-4 bg-gray-50 border-b">
-          <SearchModeSelector />
-        </div>
-      )}
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 bg-white">
-        {messages.length === 0 ? (
-          <div className="text-center text-gray-500 mt-8">
-            <div className="text-6xl mb-4">💬</div>
-            <p className="text-lg mb-2">Start chatting about the repository!</p>
-            {selectedRepository && (
-              <div className="mt-4 text-sm text-gray-400">
-                <p className="mb-2">Try asking:</p>
-                <ul className="space-y-1">
-                  <li>"Who are the main contributors?" 🕸️</li>
-                  <li>"How does the auth system work?" 📚</li>
-                  <li>"What changed in the last commit?" 📝</li>
-                  <li>"Show me the hot spots" 🔥</li>
-                </ul>
-                {streamingEnabled && (
-                  <p className="mt-3 text-cyan-600">
-                    🌊 Streaming enabled - responses will appear in real-time!
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
+      {/* Messages Area */}
+      <ScrollArea className="flex-1 p-4">
+        {messages.length === 0 && !isStreaming ? (
+          <EmptyState streamingEnabled={streamingEnabled} />
         ) : (
-          <>
-            {messages.map((message, index) => renderMessage(message, index))}
+          <div className="space-y-4 max-w-3xl mx-auto">
+            {messages.map((message, index) => (
+              <Message key={index} message={message} isStreaming={false} />
+            ))}
 
-            {/* 🆕 Streaming Message (in progress) */}
+            {/* Streaming Message */}
             {isStreaming && streamingMessage && (
-              <div className="flex justify-start mb-4">
-                <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 max-w-[70%]">
-                  <div className="whitespace-pre-wrap prose prose-sm max-w-none">
-                    {streamingMessage}
-                    <span className="inline-block w-2 h-4 bg-gray-800 ml-1 animate-pulse"></span>
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-xs text-cyan-600">🌊 Streaming...</span>
-                    <button
-                      onClick={handleAbortStreaming}
-                      className="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 transition"
-                    >
-                      Stop
-                    </button>
+              <Message
+                message={{ role: 'assistant', content: streamingMessage }}
+                isStreaming={true}
+              />
+            )}
+
+            {/* Loading Indicator */}
+            {loading && !isStreaming && (
+              <div className="flex gap-3 justify-start">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+                </div>
+                <div className="bg-muted rounded-2xl px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                    <span className="text-xs text-muted-foreground">Thinking...</span>
                   </div>
                 </div>
               </div>
             )}
-          </>
-        )}
 
-        {/* Loading indicator (normal mode only) */}
-        {loading && !isStreaming && (
-          <div className="flex justify-start mb-4">
-            <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                <span className="ml-2 text-sm">Thinking...</span>
-              </div>
-            </div>
+            <div ref={messagesEndRef} />
           </div>
         )}
+      </ScrollArea>
 
-        {/* Auto-scroll anchor */}
-        <div ref={messagesEndRef} />
-      </div>
+      {/* Streaming Stop Button */}
+      {isStreaming && (
+        <div className="flex justify-center pb-2">
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleAbortStreaming}
+            className="h-7"
+          >
+            <StopCircle className="h-3.5 w-3.5 mr-1" />
+            Stop generating
+          </Button>
+        </div>
+      )}
 
-      {/* Input */}
-      <div className="bg-gray-100 p-4 border-t">
-        <div className="flex space-x-2">
-          <input
+      {/* Input Area */}
+      <div className="border-t border-border bg-card/30 p-4">
+        <div className="flex gap-2 max-w-3xl mx-auto">
+          <Input
             type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-            placeholder={
-              selectedRepository
-                ? 'Ask anything about this repository...'
-                : 'Select a repository first...'
-            }
-            disabled={!selectedRepository || loading}
-            className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition"
+            placeholder="Ask anything about this repository..."
+            disabled={loading}
+            className="flex-1"
           />
-          <button
+          <Button
             onClick={handleSendMessage}
-            disabled={!selectedRepository || loading || !inputMessage.trim()}
-            className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+            disabled={loading || !inputMessage.trim()}
           >
-            {loading ? 'Sending...' : 'Send'}
-          </button>
+            <Send className="h-4 w-4" />
+          </Button>
         </div>
-
-        {/* Enhanced Tips */}
-        {selectedRepository && (
-          <div className="text-xs text-gray-500 mt-2 space-y-1">
-            <p>
-              <span className="font-medium text-gray-700">Current mode:</span>{' '}
-              {searchMode === 'auto' && '⚡ Auto (Smart routing)'}
-              {searchMode === 'graph' && '🕸️ Graph (Structure/History)'}
-              {searchMode === 'vector' && '📚 Vector (Semantic search)'}
-              {streamingEnabled && (
-                <span className="text-cyan-600 ml-2">
-                  🌊 Streaming enabled
-                </span>
-              )}
-            </p>
-            {ragEnabled && (
-              <p>💡 RAG enabled: Ask "how to use this library" or "explain this function"</p>
-            )}
-          </div>
-        )}
+        <div className="flex items-center justify-center gap-2 mt-2 text-[10px] text-muted-foreground">
+          <Badge variant="outline" className="text-[10px]">
+            {searchMode === 'auto' && 'Auto'}
+            {searchMode === 'graph' && 'Graph'}
+            {searchMode === 'vector' && 'Vector'}
+          </Badge>
+          {streamingEnabled && (
+            <span className="flex items-center gap-1">
+              <Radio className="h-2.5 w-2.5" />
+              Streaming
+            </span>
+          )}
+          {ragEnabled && <span>RAG enabled</span>}
+        </div>
       </div>
     </div>
   );
-};
-
-export default EnhancedChatWindow;
+}
