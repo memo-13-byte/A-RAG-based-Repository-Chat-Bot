@@ -129,7 +129,7 @@ const EnhancedChatWindow = ({ selectedRepository }) => {
     abortControllerRef.current = new AbortController();
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/chat/send', {
+      const response = await fetch('/api/chat/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
