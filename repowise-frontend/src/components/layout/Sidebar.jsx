@@ -27,7 +27,6 @@ import {
   GitBranch,
   CheckCircle2,
   AlertCircle,
-  FolderGit2,
 } from 'lucide-react';
 
 const navItems = [
@@ -242,7 +241,7 @@ export default function Sidebar() {
                       )}
                     >
                       <div className="flex items-start gap-2">
-                        <FolderGit2 className={cn(
+                        <Github className={cn(
                           "h-4 w-4 mt-0.5 shrink-0",
                           isSelected ? "text-sidebar-primary" : "text-muted-foreground"
                         )} />
@@ -282,22 +281,30 @@ export default function Sidebar() {
       {/* Footer */}
       <div className={cn(
         "border-t border-sidebar-border p-3",
-        sidebarCollapsed ? "flex justify-center" : "flex items-center justify-between"
+        sidebarCollapsed ? "flex flex-col items-center gap-2" : "flex flex-col gap-2"
       )}>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={cycleTheme}
-          className="text-sidebar-foreground hover:bg-sidebar-accent"
-        >
-          <ThemeIcon className="h-4 w-4" />
-        </Button>
-        {!sidebarCollapsed && (
-          <div className="flex items-center gap-2">
+        <div className={cn(
+          "flex items-center",
+          sidebarCollapsed ? "justify-center" : "justify-between w-full"
+        )}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={cycleTheme}
+            className="text-sidebar-foreground hover:bg-sidebar-accent"
+          >
+            <ThemeIcon className="h-4 w-4" />
+          </Button>
+          {!sidebarCollapsed && (
             <Badge variant="success" className="text-[10px]">
               Online
             </Badge>
-          </div>
+          )}
+        </div>
+        {!sidebarCollapsed && (
+          <p className="text-[10px] text-muted-foreground text-center leading-tight">
+            BBM479 Graduation Project<br />Hacettepe University CS/AI
+          </p>
         )}
       </div>
     </aside>
