@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/repository",
+      "destination": "http://62.238.7.189/api/repository/"
+    },
+    {
+      "source": "/api/repository/",
+      "destination": "http://62.238.7.189/api/repository/"
+    },
+    {
       "source": "/api/:path*",
       "destination": "http://62.238.7.189/api/:path*"
     },
